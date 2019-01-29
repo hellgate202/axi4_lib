@@ -1,0 +1,2 @@
+../src/interface/axi4_lite_if.sv
+./axi4_lite/axi4_lite_example.sv
