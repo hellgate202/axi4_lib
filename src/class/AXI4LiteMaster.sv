@@ -46,8 +46,8 @@ function automatic void init_interface();
 endfunction
 
 task automatic wr_data(
-  input bit [ADDR_WIDTH-1:0] addr,
-  input bit [DATA_WIDTH-1:0] data
+  input bit [ADDR_WIDTH - 1 : 0] addr,
+  input bit [DATA_WIDTH - 1 : 0] data
 );
 
   addr[ADDR_WORD_BITS - 1 : 0]  = '0;
