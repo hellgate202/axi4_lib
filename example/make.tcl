@@ -11,13 +11,15 @@ proc draw_waveforms { tb_name } {
 
 proc axi4_lite {} {
   compile_src axi4_lite
-  vsim axi4_lite_example
+  vopt +acc axi4_lite_example -o axi4_lite_example_opt
+  vsim axi4_lite_example_opt
   draw_waveforms axi4_lite
   run -all
 }
 
 proc axi4_stream {} {
   compile_src axi4_stream
+  vopt +acc axi4_stream_example -o axi4_stream_example_opt
   vsim axi4_stream_example
   draw_waveforms axi4_stream
   run -all
@@ -25,7 +27,8 @@ proc axi4_stream {} {
 
 proc axi4 {} {
   compile_src axi4
-  vsim axi4_example
+  vopt +acc axi4_example -o axi4_example_opt
+  vsim axi4_example_opt
   draw_waveforms axi4
   run -all
 }
