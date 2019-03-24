@@ -2,7 +2,7 @@ interface axi4_stream_if #(
   parameter int DATA_WIDTH = 32,
   parameter int ID_WIDTH   = 8,
   parameter int DEST_WIDTH = 4,
-  parameter int USER_WIDTH = 4
+  parameter int USER_WIDTH = 1
 )(
   input aclk,
   input aresetn
