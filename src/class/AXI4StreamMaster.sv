@@ -122,13 +122,26 @@ task automatic stop();
 endtask
 
 task automatic tx_data(
-  ref bit [7 : 0] tx_byte_q [$]
+  ref bit [7 : 0] tx_byte_q [$],
+  input bit       tuser_sof = 0
 );
 
   bit tvalid;
 
   bus_busy.get();
   ->pkt_start;
+  if( tuser_sof )
+    fork
+      begin
+        while( !tvalid )
+          @( posedge axi4_stream_if_v.aclk );
+        axi4_stream_if_v.tuser <= 1'b1;
+        do
+          @( posedge axi4_stream_if_v.aclk );
+        while( !axi4_stream_if_v.tready );
+        axi4_stream_if_v.tuser <= 1'b0;
+      end
+    join_none
   if( VERBOSE > 1 )
     begin
       $display( "%0d", $time() );

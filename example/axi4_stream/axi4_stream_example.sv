@@ -8,7 +8,7 @@ module axi4_stream_example;
 parameter int DATA_WIDTH       = 32;
 parameter int ID_WIDTH         = 8;
 parameter int DEST_WIDTH       = 4;
-parameter int USER_WIDTH       = 3;
+parameter int USER_WIDTH       = 1;
 parameter int RANDOM_TVALID    = 1;
 parameter int RANDOM_TREADY    = 1;
 parameter int CLK_T            = 8000;
