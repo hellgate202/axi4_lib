@@ -1,7 +1,7 @@
 interface axi4_if#(
   parameter int DATA_WIDTH   = 32,
   parameter int ADDR_WIDTH   = 16,
-  parameter int ID_WIDTH     = 4,
+  parameter int ID_WIDTH     = 1,
   parameter int AWUSER_WIDTH = 1,
   parameter int WUSER_WIDTH  = 1,
   parameter int BUSER_WIDTH  = 1,

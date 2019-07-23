@@ -2,8 +2,8 @@
 
 class AXI4StreamMaster #(
   parameter int DATA_WIDTH     = 32,
-  parameter int ID_WIDTH       = 8,
-  parameter int DEST_WIDTH     = 4,
+  parameter int ID_WIDTH       = 1,
+  parameter int DEST_WIDTH     = 1,
   parameter int USER_WIDTH     = 1,
 
   parameter int RANDOM_TVALID  = 0,

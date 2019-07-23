@@ -20,7 +20,7 @@ proc axi4_lite {} {
 proc axi4_stream {} {
   compile_src axi4_stream
   vopt +acc axi4_stream_example -o axi4_stream_example_opt
-  vsim axi4_stream_example
+  vsim axi4_stream_example_opt
   draw_waveforms axi4_stream
   run -all
 }
