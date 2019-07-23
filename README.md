@@ -5,13 +5,13 @@ Interfaces reperesents only connections and can be used for synthesis.
 
 If you want to drive them for simulation purposes, use classes listed below.
 
-For example projects refer to ./example directory.
+For example projects refer to ./tb directory.
 
 You can make yourself convinced by running
 
     vsim -do make.tcl
 
-in ./example directory and following the instructions. 
+in ./tb directory and following the instructions. 
 
 Tested in QuestaSim 10.4e and ModelSim 10.5b
  
