@@ -25,6 +25,14 @@ proc axi4_stream {} {
   run -all
 }
 
+proc axi4_stream {} {
+  compile_src axi4_stream_pkt_split
+  vopt +acc axi4_stream_pkt_split -o axi4_stream_pkt_split_opt
+  vsim axi4_stream_pkt_split_opt
+  draw_waveforms axi4_stream_pkt_split
+  run -all
+}
+
 proc axi4 {} {
   compile_src axi4
   vopt +acc axi4_example -o axi4_example_opt
@@ -33,11 +41,12 @@ proc axi4 {} {
   run -all
 }
 
+
 proc help {} {
-  echo "Type following one of following commands to run appropriate example:"
-  echo "axi4        - AXI4 example."
-  echo "axi4_lite   - AXI4 Lite example."
-  echo "axi4_stream - AXI4 Stream example."
+  echo "axi4                  - AXI4 example."
+  echo "axi4_lite             - AXI4 Lite example."
+  echo "axi4_stream           - AXI4 Stream example."
+  echo "axi4_stream_pkt_split - AXI4 Stream Packet Splitter Testbench"
   echo "Type help to repeat this message."
 }
 
