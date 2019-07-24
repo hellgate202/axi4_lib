@@ -9,8 +9,8 @@ parameter int DATA_WIDTH     = 32;
 parameter int ID_WIDTH       = 1;
 parameter int DEST_WIDTH     = 1;
 parameter int USER_WIDTH     = 1;
-parameter int RANDOM_TVALID  = 0;
-parameter int RANDOM_TREADY  = 0;
+parameter int RANDOM_TVALID  = 1;
+parameter int RANDOM_TREADY  = 1;
 parameter int VERBOSE        = 0;
 
 parameter int MAX_PKT_SIZE_B = 1024;
@@ -20,9 +20,9 @@ parameter int CLK_T          = 5000;
 
 typedef bit [7 : 0] pkt_q [$];
 
-bit clk;
-bit rst;
-bit [PKT_SIZE_WIDTH - 1 : 0] max_pkt_size;
+bit                      clk;
+bit                      rst;
+bit [PKT_SIZE_WIDTH : 0] max_pkt_size;
 
 pkt_q tx_pkt;
 pkt_q rx_pkt;
@@ -109,6 +109,7 @@ axi4_stream_pkt_split #(
 ) DUT (
   .clk_i          ( clk            ),
   .rst_i          ( rst            ),
+  .max_pkt_size_i ( max_pkt_size   ),
   .pkt_i          ( rx_if          ),
   .pkt_o          ( tx_if          )
 );
@@ -129,8 +130,6 @@ initial
         for( int j = 1; j < 1000; j++ )
           begin
             tx_pkt = generate_pkt( j );
-            repeat( rx_pkt.size() )
-              ref_pkt.push_back( tx_pkt.pop_front() );
             pkt_sender.send_pkt( tx_pkt );
             if( j % i )
               predicted_pkts = j / i + 1;
@@ -140,7 +139,7 @@ initial
               begin
                 @( pkt_receiver.pkt_end );
                 rx_data_mbx.get( rx_pkt );
-                if( rx_pkt.size() != i )
+                if( rx_pkt.size() != i && rx_pkt.size() != tx_pkt.size() )
                   begin
                     $display( "Size is incorrect" );
                     $display( "Should_be %0d", i );
