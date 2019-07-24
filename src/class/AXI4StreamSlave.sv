@@ -72,7 +72,11 @@ task automatic run();
             if( axi4_stream_if_v.tvalid )
               get_pkt();
             else
-              @( posedge axi4_stream_if_v.aclk );
+              begin
+                if( RANDOM_TREADY )
+                  axi4_stream_if_v.tready <= $urandom_range( 1 );
+                @( posedge axi4_stream_if_v.aclk );
+              end
             if( ~running )
               begin
                 if( VERBOSE > 0 )

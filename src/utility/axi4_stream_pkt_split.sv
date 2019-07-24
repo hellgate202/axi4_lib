@@ -244,16 +244,17 @@ always_ff @( posedge clk_i, posedge rst_i )
       else
         int_bytes_left <= unsent_bytes + DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] - usual_bytes_tlast + rx_valid_bytes;
     else
-      if( tx_pkt_avail_bytes > DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] )
-        if( int_bytes_left > DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] )
-          int_bytes_left <= int_bytes_left - DATA_WIDTH_B[BYTE_CNT_WIDTH : 0];
+      if( pkt_o.tready )
+        if( tx_pkt_avail_bytes > DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] )
+          if( int_bytes_left > DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] )
+            int_bytes_left <= int_bytes_left - DATA_WIDTH_B[BYTE_CNT_WIDTH : 0];
+          else
+            int_bytes_left <= '0;
         else
-          int_bytes_left <= '0;
-      else
-        if( tx_pkt_avail_bytes < int_bytes_left )
-          int_bytes_left <= int_bytes_left - tx_pkt_avail_bytes;
-        else
-          int_bytes_left <= '0;
+          if( tx_pkt_avail_bytes < int_bytes_left )
+            int_bytes_left <= int_bytes_left - tx_pkt_avail_bytes;
+          else
+            int_bytes_left <= '0;
 
 always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )

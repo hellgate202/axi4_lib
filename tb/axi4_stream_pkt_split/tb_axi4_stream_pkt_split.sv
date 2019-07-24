@@ -139,7 +139,7 @@ initial
               begin
                 @( pkt_receiver.pkt_end );
                 rx_data_mbx.get( rx_pkt );
-                if( rx_pkt.size() != i && rx_pkt.size() != tx_pkt.size() )
+                if( rx_pkt.size() != i && rx_pkt.size() > tx_pkt.size() )
                   begin
                     $display( "Size is incorrect" );
                     $display( "Should_be %0d", i );
