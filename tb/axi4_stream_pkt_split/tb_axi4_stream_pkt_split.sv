@@ -37,7 +37,7 @@ axi4_stream_if #(
   .USER_WIDTH  ( USER_WIDTH )
 ) tx_if (
   .aclk        ( clk        ),
-  .aresetn     ( ~rst       )
+  .aresetn     ( !rst       )
 );
 
 axi4_stream_if #(
@@ -47,7 +47,7 @@ axi4_stream_if #(
   .USER_WIDTH  ( USER_WIDTH )
 ) rx_if (
   .aclk        ( clk        ),
-  .aresetn     ( ~rst       )
+  .aresetn     ( !rst       )
 );
 
 AXI4StreamMaster #(
@@ -100,6 +100,19 @@ endfunction
 
 int predicted_pkts;
 
+axi4_stream_pkt_split #(
+  .DATA_WIDTH     ( DATA_WIDTH     ),
+  .ID_WIDTH       ( ID_WIDTH       ),
+  .DEST_WIDTH     ( DEST_WIDTH     ),
+  .USER_WIDTH     ( USER_WIDTH     ),
+  .MAX_PKT_SIZE_B ( MAX_PKT_SIZE_B )
+) DUT (
+  .clk_i          ( clk            ),
+  .rst_i          ( rst            ),
+  .pkt_i          ( rx_if          ),
+  .pkt_o          ( tx_if          )
+);
+
 initial
   begin
     pkt_sender   = new( .axi4_stream_if_v ( rx_if ) );
@@ -108,7 +121,7 @@ initial
     fork
       clk_gen();
     join_none
-    apply_rst()
+    apply_rst();
     @( posedge clk );
     for( int i = 1; i < 100; i++ )
       begin

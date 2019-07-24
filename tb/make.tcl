@@ -25,10 +25,10 @@ proc axi4_stream {} {
   run -all
 }
 
-proc axi4_stream {} {
+proc axi4_stream_pkt_split {} {
   compile_src axi4_stream_pkt_split
-  vopt +acc axi4_stream_pkt_split -o axi4_stream_pkt_split_opt
-  vsim axi4_stream_pkt_split_opt
+  vopt +acc tb_axi4_stream_pkt_split -o tb_axi4_stream_pkt_split_opt
+  vsim tb_axi4_stream_pkt_split_opt
   draw_waveforms axi4_stream_pkt_split
   run -all
 }

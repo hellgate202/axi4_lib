@@ -18,7 +18,7 @@ localparam int BYTE_CNT_WIDTH = $clog2( DATA_WIDTH_B );
 
 logic [DATA_WIDTH - 1 : 0][1 : 0]   data_buf;
 logic [DATA_WIDTH_B - 1 : 0][1 : 0] tstrb_buf;
-logic [DATA_WIDTH_B - 1 : 0][1 : 0] tkeep_buf
+logic [DATA_WIDTH_B - 1 : 0][1 : 0] tkeep_buf;
 logic                               buf_valid;
 logic [ID_WIDTH - 1 : 0]            tid_buf;
 logic [DEST_WIDTH - 1 : 0]          tdest_buf;
@@ -154,7 +154,7 @@ always_comb
           else
             unsent_bytes_comb = unsent_bytes + DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] - usual_bytes_tlast;
         else
-          if( state == INC_UNSENT_S && pkt_i.valid )
+          if( state == INC_UNSENT_S && pkt_i.tvalid )
             if( unsent_bytes > max_pkt_size_i[BYTE_CNT_WIDTH : 0] )
               if( max_pkt_size_i > DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] )
                 unsent_bytes_comb = unsent_bytes - DATA_WIDTH_B[BYTE_CNT_WIDTH : 0];
@@ -176,7 +176,7 @@ always_comb
                   unsent_bytes_comb = '0;
   end
 
-assign buf_shift         = DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] - bytes_left;
+assign buf_shift         = DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] - unsent_bytes;
 assign shifted_data_buf  = data_buf >>  ( buf_shift * 8 );
 assign shifted_tstrb_buf = tstrb_buf >> ( buf_shift * 8 );
 assign shifted_tkeep_buf = tkeep_buf >> ( buf_shift * 8 );
@@ -254,7 +254,7 @@ always_ff @( posedge clk_i, posedge rst_i )
 
 always_comb
   begin
-    tx_pkt_avail_bytes = tx_pkt_avail_bytes;
+    tx_pkt_avail_bytes_comb = tx_pkt_avail_bytes;
     if( state == IDLE_S )
       tx_pkt_avail_bytes_comb = max_pkt_size_i;
     else
@@ -262,7 +262,7 @@ always_comb
         if( pkt_o.tlast )
           tx_pkt_avail_bytes_comb = max_pkt_size_i;
         else
-          tx_pkt_avail_bytes_comb = tx_byte_left - tx_valid_bytes;
+          tx_pkt_avail_bytes_comb = tx_pkt_avail_bytes - tx_valid_bytes;
   end
 
 assign backpressure = state == ACC_S && ( rx_pkt_byte_cnt + unsent_bytes ) >= max_pkt_size_i && !pkt_i.tlast && pkt_i.tvalid ||
@@ -270,7 +270,7 @@ assign backpressure = state == ACC_S && ( rx_pkt_byte_cnt + unsent_bytes ) >= ma
                       state == DEC_UNSENT_S && unsent_bytes > max_pkt_size_i[BYTE_CNT_WIDTH : 0] && max_pkt_size_i <= DATA_WIDTH_B[PKT_SIZE_WIDTH - 1 : 0] ||
                       state == PKT_I_TLAST_S;
 
-assign pkt_i.tready = hold_ready ? 1'b0 : pkt_o.tready;
+assign pkt_i.tready = backpressure ? 1'b0 : pkt_o.tready;
 assign pkt_o.tdata  = shifted_data_buf[0];
 assign pkt_o.tvalid = ( state == ACC_S || state == INC_UNSENT_S ) && buf_valid ||
                       state == DEC_UNSENT_S || state == PKT_I_TLAST_S;
