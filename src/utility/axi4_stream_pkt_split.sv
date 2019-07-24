@@ -16,25 +16,30 @@ module axi4_stream_pkt_split #(
 localparam int DATA_WIDTH_B   = DATA_WIDTH / 8;
 localparam int BYTE_CNT_WIDTH = $clog2( DATA_WIDTH_B );
 
-logic [DATA_WIDTH - 1 : 0][1 : 0] data_buf;
-logic                             word_buf_valid;
-logic [ID_WIDTH - 1 : 0]          id_buf;
-logic [DEST_WIDTH - 1 : 0]        dest_buf;
-logic [USER_WIDTH - 1 : 0]        user_buf;
-logic [DATA_WIDTH - 1 : 0][1 : 0] shifted_buf;
-logic [BYTE_CNT_WIDTH : 0]        data_buf_shift;
-logic [PKT_SIZE_WIDTH - 1 : 0]    rx_pkt_byte_cnt, rx_pkt_byte_cnt_comb;
-logic [PKT_SIZE_WIDTH - 1 : 0]    tx_pkt_avail_bytes, tx_pkt_avail_bytes_comb;
-logic [BYTE_CNT_WIDTH : 0]        unsent_bytes, unsent_bytes_comb;
-logic [PKT_SIZE_WIDTH - 1 : 0]    tlast_bytes_left;
-logic                             backpressure;
-logic [DATA_WIDTH_B - 1 : 0]      pkt_o_usual_tstrb;
-logic [DATA_WIDTH_B - 1 : 0]      pkt_o_tlast_tstrb;
-logic                             pkt_o_cut_pkt;
-logic [BYTE_CNT_WIDTH : 0]        pkt_i_valid_bytes;
-logic                             last_transfer;
-
-logic                             pkt_i_hsk;
+logic [DATA_WIDTH - 1 : 0][1 : 0]   data_buf;
+logic [DATA_WIDTH_B - 1 : 0][1 : 0] tstrb_buf;
+logic [DATA_WIDTH_B - 1 : 0][1 : 0] tkeep_buf
+logic                               buf_valid;
+logic [ID_WIDTH - 1 : 0]            tid_buf;
+logic [DEST_WIDTH - 1 : 0]          tdest_buf;
+logic [USER_WIDTH - 1 : 0]          tuser_buf;
+logic [DATA_WIDTH - 1 : 0][1 : 0]   shifted_data_buf;
+logic [DATA_WIDTH_B - 1 : 0][1 : 0] shifted_tstrb_buf;
+logic [DATA_WIDTH_B - 1 : 0][1 : 0] shifted_tkeep_buf;
+logic [BYTE_CNT_WIDTH : 0]          buf_shift;
+logic [PKT_SIZE_WIDTH - 1 : 0]      rx_pkt_byte_cnt, rx_pkt_byte_cnt_comb;
+logic [PKT_SIZE_WIDTH - 1 : 0]      tx_pkt_avail_bytes, tx_pkt_avail_bytes_comb;
+logic [BYTE_CNT_WIDTH : 0]          unsent_bytes, unsent_bytes_comb;
+logic [PKT_SIZE_WIDTH - 1 : 0]      int_bytes_left;
+logic                               backpressure;
+logic [BYTE_CNT_WIDTH : 0]          usual_bytes_tlast;
+logic [BYTE_CNT_WIDTH : 0]          int_bytes_tlast;
+logic                               tlast_during_int;
+logic [BYTE_CNT_WIDTH : 0]          rx_valid_bytes;
+logic [BYTE_CNT_WIDTH : 0]          tx_valid_bytes;
+logic                               last_transfer;
+logic                               tlast_lock;
+logic                               tfirst;
 
 enum logic [2 : 0] { IDLE_S,
                      ACC_S,
@@ -54,7 +59,7 @@ always_comb
     case( state )
       IDLE_S:
         begin
-          if( pkt_i_hsk )
+          if( pkt_i.tvalid && pkt_o.tready )
             if( pkt_i.tlast )
               next_state = PKT_I_TLAST_S;
             else
@@ -65,7 +70,7 @@ always_comb
         end
       ACC_S:
         begin
-          if( pkt_i_hsk )
+          if( pkt_i.tvalid && pkt_o.tready )
             if( pkt_i.tlast )
               next_state = PKT_I_TLAST_S;
             else
@@ -77,7 +82,7 @@ always_comb
         end
       INC_UNSENT_S:
         begin
-          if( pkt_i_hsk )
+          if( pkt_i.tvalid && pkt_o.tready )
             if( unsent_bytes > max_pkt_size_i[BYTE_CNT_WIDTH : 0] )
               next_state = DEC_UNSENT_S;
             else
@@ -89,11 +94,11 @@ always_comb
         end
       DEC_UNSENT_S:
         begin
-          if( pkt_i_hsk )
-            if( max_pkt_size_i > DATA_WIDTH_B[EMPTY_WIDTH : 0] )
+          if( pkt_i.tvalid && pkt_o.tready )
+            if( max_pkt_size_i > DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] )
               next_state = ACC_S;
             else
-              if( unsent_bytes <= max_pkt_size_i[EMPTY_WIDTH : 0] )
+              if( unsent_bytes <= max_pkt_size_i[BYTE_CNT_WIDTH : 0] )
                 if( pkt_i.tlast )
                   next_state = PKT_I_TLAST_S;
                 else
@@ -107,7 +112,174 @@ always_comb
     endcase
   end
 
-assign pkt_o_usual_tstrb = DATA_WIDTH\[EMPTY_WIDTH - 1 : 0] - max_pkt_size_i[EMPTY_WIDTH - 1 : 0];
+assign usual_bytes_tlast = max_pkt_size_i[BYTE_CNT_WIDTH - 1 : 0];
+assign int_bytes_tlast   = int_bytes_left[BYTE_CNT_WIDTH - 1 : 0];
 
+always_comb
+  begin
+    rx_valid_bytes = '0;
+    for( int i = 0; i < DATA_WIDTH_B; i++ )
+      rx_valid_bytes = rx_valid_bytes + pkt_i.tstrb[i] || pkt_i.tkeep[i];
+  end
+
+always_comb
+  begin
+    tx_valid_bytes = '0;
+    for( int i = 0; i < DATA_WIDTH_B; i++ )
+      tx_valid_bytes = tx_valid_bytes + pkt_i.tstrb[i] || pkt_i.tkeep[i];
+  end
+
+assign tlast_during_int = tx_pkt_avail_bytes <= DATA_WIDTH_B[BYTE_CNT_WIDTH - 1 : 0];
+assign last_transfer    = int_bytes_left <= tx_pkt_avail_bytes && 
+                          int_bytes_left <= DATA_WIDTH_B[BYTE_CNT_WIDTH : 0];
+
+always_ff @( posedge clk_i, posedge rst_i )
+  if( rst_i )
+    unsent_bytes <= '0;
+  else
+    unsent_bytes <= unsent_bytes_comb;
+
+always_comb
+  begin
+    unsent_bytes_comb = unsent_bytes;
+    if( pkt_o.tready )
+      if( state == ACC_S && ( rx_pkt_byte_cnt + unsent_bytes ) >= max_pkt_size_i &&
+          pkt_i.tvalid && !pkt_i.tlast )
+        unsent_bytes_comb = unsent_bytes - DATA_WIDTH_B[BYTE_CNT_WIDTH : 0];
+      else
+        if( state == DEC_UNSENT_S )
+          if( unsent_bytes > max_pkt_size_i[BYTE_CNT_WIDTH : 0] &&
+              max_pkt_size_i <= DATA_WIDTH_B[BYTE_CNT_WIDTH] )
+            unsent_bytes_comb = unsent_bytes - max_pkt_size_i[BYTE_CNT_WIDTH : 0];
+          else
+            unsent_bytes_comb = unsent_bytes + DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] - usual_bytes_tlast;
+        else
+          if( state == INC_UNSENT_S && pkt_i.valid )
+            if( unsent_bytes > max_pkt_size_i[BYTE_CNT_WIDTH : 0] )
+              if( max_pkt_size_i > DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] )
+                unsent_bytes_comb = unsent_bytes - DATA_WIDTH_B[BYTE_CNT_WIDTH : 0];
+              else
+                unsent_bytes_comb = unsent_bytes - max_pkt_size_i[BYTE_CNT_WIDTH : 0];
+            else
+              unsent_bytes_comb = unsent_bytes + DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] - usual_bytes_tlast;
+          else
+            if( state == PKT_I_TLAST_S )
+              if( tx_pkt_avail_bytes > DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] )
+                if( int_bytes_left > DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] )
+                  unsent_bytes_comb = unsent_bytes - DATA_WIDTH_B[BYTE_CNT_WIDTH : 0];
+                else
+                  unsent_bytes_comb = '0;
+              else
+                if( tx_pkt_avail_bytes < int_bytes_left )
+                  unsent_bytes_comb = unsent_bytes - tx_pkt_avail_bytes[BYTE_CNT_WIDTH : 0];
+                else
+                  unsent_bytes_comb = '0;
+  end
+
+assign buf_shift         = DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] - bytes_left;
+assign shifted_data_buf  = data_buf >>  ( buf_shift * 8 );
+assign shifted_tstrb_buf = tstrb_buf >> ( buf_shift * 8 );
+assign shifted_tkeep_buf = tkeep_buf >> ( buf_shift * 8 );
+
+always_ff @( posedge clk_i, posedge rst_i )
+  if( rst_i )
+    begin
+      data_buf  <= '0;
+      tkeep_buf <= '0;
+      tstrb_buf <= '0;
+      tid_buf   <= '0;
+      tdest_buf <= '0;
+      tuser_buf <= '0;
+    end
+  else
+    if( pkt_i.tready && pkt_i.tvalid )
+      begin
+        data_buf[0]  <= pkt_i.tdata;
+        data_buf[1]  <= data_buf[0];
+        tkeep_buf[0] <= pkt_i.tkeep;
+        tkeep_buf[1] <= tkeep_buf[0];
+        tstrb_buf[0] <= pkt_i.tstrb;
+        tstrb_buf[1] <= tstrb_buf[0];
+        tid_buf      <= pkt_i.tid;
+        tdest_buf    <= pkt_i.tdest;
+        tuser_buf    <= pkt_i.tuser;
+      end
+
+always_ff @( posedge clk_i, posedge rst_i )
+  if( rst_i )
+    buf_valid <= '0;
+  else
+    if( pkt_i.tready )
+      buf_valid <= pkt_i.tvalid;
+
+always_ff @( posedge clk_i, posedge rst_i )
+  if( rst_i )
+    tlast_lock <= '0;
+  else
+    if( pkt_i.tvalid && pkt_i.tready ) 
+      if( pkt_i.tlast )
+        tlast_lock <= 1'b1;
+      else
+        tlast_lock <= 1'b0;
+
+assign tfirst = tlast_lock && pkt_i.tvalid;
+
+always_ff @( posedge clk_i, posedge rst_i )
+  if( rst_i )
+    rx_pkt_byte_cnt <= '0;
+  else
+    rx_pkt_byte_cnt <= rx_pkt_byte_cnt_comb;
+
+always_comb
+  begin
+    rx_pkt_byte_cnt_comb = rx_pkt_byte_cnt;
+    if( pkt_i.tvalid && pkt_i.tready )
+      if( tfirst || state == INC_UNSENT_S || state == DEC_UNSENT_S )
+        if( pkt_i.tlast )
+          rx_pkt_byte_cnt_comb = rx_valid_bytes;
+        else
+          rx_pkt_byte_cnt_comb = DATA_WIDTH_B[BYTE_CNT_WIDTH : 0];
+      else
+        if( pkt_i.tlast )
+          rx_pkt_byte_cnt_comb = rx_pkt_byte_cnt + rx_valid_bytes;
+        else
+          rx_pkt_byte_cnt_comb = rx_pkt_byte_cnt + DATA_WIDTH_B[BYTE_CNT_WIDTH : 0];
+  end
+
+always_ff @( posedge clk_i, posedge rst_i )
+  if( rst_i )
+    tx_pkt_avail_bytes <= '0;
+  else
+    tx_pkt_avail_bytes <= tx_pkt_avail_bytes_comb;
+
+always_comb
+  begin
+    tx_pkt_avail_bytes = tx_pkt_avail_bytes;
+    if( state == IDLE_S )
+      tx_pkt_avail_bytes_comb = max_pkt_size_i;
+    else
+      if( pkt_o.tvalid && pkt_o.tready )
+        if( pkt_o.tlast )
+          tx_pkt_avail_bytes_comb = max_pkt_size_i;
+        else
+          tx_pkt_avail_bytes_comb = tx_byte_left - tx_valid_bytes;
+  end
+
+assign backpressure = state == ACC_S && ( rx_pkt_byte_cnt + unsent_bytes ) >= max_pkt_size_i && !pkt_i.tlast && pkt_i.tvalid ||
+                      state == INC_UNSENT_S && unsent_bytes > max_pkt_size_i[BYTE_CNT_WIDTH : 0] && pkt_i.tvalid ||
+                      state == DEC_UNSENT_S && unsent_bytes > max_pkt_size_i[BYTE_CNT_WIDTH : 0] && max_pkt_size_i <= DATA_WIDTH_B[PKT_SIZE_WIDTH - 1 : 0] ||
+                      state == PKT_I_TLAST_S;
+
+assign pkt_i.tready = hold_ready ? 1'b0 : pkt_o.tready;
+assign pkt_o.tdata  = shifted_data_buf[0];
+assign pkt_o.tvalid = ( state == ACC_S || state == INC_UNSENT_S ) && buf_valid ||
+                      state == DEC_UNSENT_S || state == PKT_I_TLAST_S;
+assign pkt_o.tlast  = state == DEC_UNSENT_S || state == INC_UNSENT_S ||
+                      state == PKT_I_TLAST_S && ( tlast_during_int || last_transfer );
+assign pkt_o.tkeep  = shifted_tkeep_buf[0];
+assign pkt_o.tstrb  = shifted_tstrb_buf[0];
+assign pkt_o.tid    = tid_buf;
+assign pkt_o.tdest  = tdest_buf;
+assign pkt_o.tuser  = tuser_buf;
 
 endmodule
