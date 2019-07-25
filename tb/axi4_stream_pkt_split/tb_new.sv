@@ -24,6 +24,8 @@ bit                      clk;
 bit                      rst;
 bit [PKT_SIZE_WIDTH : 0] max_pkt_size;
 
+pkt_q                    tx_pkt;
+
 mailbox rx_data_mbx = new();
 
 axi4_stream_if #(
@@ -94,8 +96,6 @@ function automatic pkt_q generate_pkt( int size );
 
 endfunction
 
-task automatic ref_model
-
 axi4_stream_pkt_split #(
   .DATA_WIDTH     ( DATA_WIDTH     ),
   .ID_WIDTH       ( ID_WIDTH       ),
@@ -110,6 +110,9 @@ axi4_stream_pkt_split #(
   .pkt_o          ( tx_if          )
 );
 
+int pkt_size;
+int predicted_pkt_cnt;
+
 initial
   begin
     pkt_sender   = new( .axi4_stream_if_v ( rx_if ) );
@@ -120,4 +123,20 @@ initial
     join_none
     apply_rst();
     @( posedge clk );
+    max_pkt_size = 11;
+    repeat( 10 )
+      begin
+        pkt_size = $urandom_range( MAX_PKT_SIZE_B, 1 );
+        tx_pkt = generate_pkt( pkt_size );
+        pkt_sender.send_pkt( tx_pkt );
+        predicted_pkt_cnt += ( pkt_size % max_pkt_size ) ? ( pkt_size / max_pkt_size + 1 ): ( pkt_size / max_pkt_size );
+      end
+    @( posedge clk );
+    while( rx_data_mbx.num() != predicted_pkt_cnt )
+      @( posedge clk );
+    repeat( 10 )
+      @( posedge clk );
+    $stop();
   end
+
+endmodule

@@ -138,7 +138,7 @@ task automatic tx_data(
         axi4_stream_if_v.tuser <= 1'b1;
         do
           @( posedge axi4_stream_if_v.aclk );
-        while( !axi4_stream_if_v.tready );
+        while( axi4_stream_if_v.tready === 1'bx || axi4_stream_if_v.tready == 1'b0 );
         axi4_stream_if_v.tuser <= 1'b0;
       end
     join_none
@@ -175,7 +175,7 @@ task automatic tx_data(
             watchdog( axi4_stream_if_v.tready, "TREADY" );
           do
             @( posedge axi4_stream_if_v.aclk );
-          while( ~axi4_stream_if_v.tready );
+          while( axi4_stream_if_v.tready === 1'bx || axi4_stream_if_v.tready == 1'b0 );
           if( VERBOSE > 2 )
             begin
               $display( "%0d", $time() );

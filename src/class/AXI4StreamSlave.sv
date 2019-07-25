@@ -1,15 +1,17 @@
 `timescale 1 ps / 1 ps
 
 class AXI4StreamSlave #(
-  parameter int DATA_WIDTH     = 32,
-  parameter int ID_WIDTH       = 1,
-  parameter int DEST_WIDTH     = 1,
-  parameter int USER_WIDTH     = 1,
+  parameter int DATA_WIDTH        = 32,
+  parameter int ID_WIDTH          = 1,
+  parameter int DEST_WIDTH        = 1,
+  parameter int USER_WIDTH        = 1,
 
-  parameter int RANDOM_TREADY  = 0,
-  parameter int VERBOSE        = 0,
-  parameter int WATCHDOG_EN    = 1,
-  parameter int WATCHDOG_LIMIT = 100
+  parameter int RANDOM_TREADY     = 0,
+  parameter int VERBOSE           = 0,
+  parameter int WATCHDOG_EN       = 1,
+  parameter int WATCHDOG_LIMIT    = 100,
+
+  parameter int DISCONNECT_TREADY = 0
 );
 
 localparam int DATA_WIDTH_B = DATA_WIDTH / 8;
@@ -45,8 +47,8 @@ function new(
 endfunction
 
 local function automatic void init_interface();
-
-  axi4_stream_if_v.tready = 1'b0;
+  if( !DISCONNECT_TREADY )
+    axi4_stream_if_v.tready = 1'b0;
   fork
     run();
   join_none
@@ -57,10 +59,11 @@ task automatic run();
   if( ~running )
     begin
       running = 1'b1;
-      if( RANDOM_TREADY )
-        axi4_stream_if_v.tready = 1'b0;
-      else
-        axi4_stream_if_v.tready = 1'b1;
+      if( !DISCONNECT_TREADY )
+        if( RANDOM_TREADY )
+          axi4_stream_if_v.tready = 1'b0;
+        else
+          axi4_stream_if_v.tready = 1'b1;
       if( VERBOSE > 0 )
         begin
           $display( "%0d", $time() );
@@ -73,7 +76,7 @@ task automatic run();
               get_pkt();
             else
               begin
-                if( RANDOM_TREADY )
+                if( RANDOM_TREADY && !DISCONNECT_TREADY )
                   axi4_stream_if_v.tready <= $urandom_range( 1 );
                 @( posedge axi4_stream_if_v.aclk );
               end
@@ -84,7 +87,8 @@ task automatic run();
                     $display( "%0d", $time() );
                     $display( "AXI4-Stream Slave: interface listening is disabled." );
                   end
-                axi4_stream_if_v.tready = 1'b0;
+                if( !DISCONNECT_TREADY )
+                  axi4_stream_if_v.tready = 1'b0;
                 break;
               end
           end
@@ -125,7 +129,8 @@ local task automatic get_pkt();
         tready = $urandom_range( 1 );
       else
         tready = 1'b1;
-      axi4_stream_if_v.tready <= tready;
+      if( !DISCONNECT_TREADY )
+        axi4_stream_if_v.tready <= tready;
       if( axi4_stream_if_v.tvalid && axi4_stream_if_v.tready )
         begin
           if( VERBOSE > 2 )
@@ -139,7 +144,7 @@ local task automatic get_pkt();
           if( axi4_stream_if_v.tlast )
             begin
               eop = 1'b1;
-              if( RANDOM_TREADY )
+              if( RANDOM_TREADY && !DISCONNECT_TREADY )
                 axi4_stream_if_v.tready <= 1'b0;
             end
         end
