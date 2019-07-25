@@ -46,7 +46,7 @@ function new(
 
 endfunction
 
-local function automatic void init_interface();
+protected function automatic void init_interface();
   if( !DISCONNECT_TREADY )
     axi4_stream_if_v.tready = 1'b0;
   fork
@@ -109,7 +109,7 @@ task automatic stop();
 
 endtask
 
-local task automatic get_pkt();
+protected task automatic get_pkt();
  
   bit [7 : 0] rx_byte_q [$];
   bit         tready;
@@ -161,7 +161,7 @@ local task automatic get_pkt();
 
 endtask
 
-local task automatic watchdog(
+protected task automatic watchdog(
   ref logic     signal,
   input string  msg = "",
   input bit     value = 1'b1
