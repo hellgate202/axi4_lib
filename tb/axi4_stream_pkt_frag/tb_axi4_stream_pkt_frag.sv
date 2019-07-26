@@ -3,14 +3,14 @@
 
 `timescale 1 ps / 1 ps
 
-module tb_axi4_stream_pkt_split;
+module tb_axi4_stream_pkt_frag;
 
 parameter int DATA_WIDTH     = 32;
 parameter int ID_WIDTH       = 1;
 parameter int DEST_WIDTH     = 1;
 parameter int USER_WIDTH     = 1;
-parameter int RANDOM_TVALID  = 0;
-parameter int RANDOM_TREADY  = 0;
+parameter int RANDOM_TVALID  = 1;
+parameter int RANDOM_TREADY  = 1;
 parameter int VERBOSE        = 0;
 
 parameter int MAX_PKT_SIZE_B = 1024;
@@ -23,7 +23,7 @@ typedef bit [7 : 0] pkt_q [$];
 
 bit                      clk;
 bit                      rst;
-bit [PKT_SIZE_WIDTH : 0] max_pkt_size;
+bit [PKT_SIZE_WIDTH : 0] max_frag_size;
 
 pkt_q                    tx_pkt;
 
@@ -145,18 +145,18 @@ task automatic compare_mbx();
   join_none
 endtask
 
-axi4_stream_pkt_split #(
-  .DATA_WIDTH     ( DATA_WIDTH     ),
-  .ID_WIDTH       ( ID_WIDTH       ),
-  .DEST_WIDTH     ( DEST_WIDTH     ),
-  .USER_WIDTH     ( USER_WIDTH     ),
-  .MAX_PKT_SIZE_B ( MAX_PKT_SIZE_B )
+axi4_stream_pkt_frag #(
+  .DATA_WIDTH      ( DATA_WIDTH      ),
+  .ID_WIDTH        ( ID_WIDTH        ),
+  .DEST_WIDTH      ( DEST_WIDTH      ),
+  .USER_WIDTH      ( USER_WIDTH      ),
+  .MAX_PKT_SIZE_B  ( MAX_PKT_SIZE_B  )
 ) DUT (
-  .clk_i          ( clk            ),
-  .rst_i          ( rst            ),
-  .max_pkt_size_i ( max_pkt_size   ),
-  .pkt_i          ( rx_if          ),
-  .pkt_o          ( tx_if          )
+  .clk_i           ( clk             ),
+  .rst_i           ( rst             ),
+  .max_frag_size_i ( max_frag_size   ),
+  .pkt_i           ( rx_if           ),
+  .pkt_o           ( tx_if           )
 );
 
 initial
@@ -172,11 +172,11 @@ initial
     @( posedge clk );
     for( int i = 1; i <= 4 * DATA_WIDTH_B; i++ )
       begin
-        max_pkt_size = i;
+        max_frag_size = i;
         for( int j = 1; j <= 4 * DATA_WIDTH_B; j++ )
           begin
             tx_pkt = generate_pkt( j );
-            ref_model( tx_pkt, max_pkt_size );
+            ref_model( tx_pkt, max_frag_size );
             pkt_sender.tx_data( tx_pkt );
           end
         repeat( 100 )
@@ -184,14 +184,14 @@ initial
       end
     repeat( 100 )
       begin
-        max_pkt_size = $urandom_range( 16, 1 );
+        max_frag_size = $urandom_range( 16, 1 );
         repeat( 100 )
           begin
             tx_pkt = generate_pkt( $urandom_range( 16, 1 ) );
-            ref_model( tx_pkt, max_pkt_size );
+            ref_model( tx_pkt, max_frag_size );
             pkt_sender.tx_data( tx_pkt );
             tx_pkt = generate_pkt( $urandom_range( 32, 16 ) );
-            ref_model( tx_pkt, max_pkt_size );
+            ref_model( tx_pkt, max_frag_size );
             pkt_sender.tx_data( tx_pkt );
           end
         repeat( 100 )
