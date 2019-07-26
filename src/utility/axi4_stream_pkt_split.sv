@@ -238,7 +238,7 @@ always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
     int_bytes_left <= '0;
   else
-    if( pkt_i.tvalid && pkt_o.tready && pkt_i.tlast )
+    if( pkt_i.tvalid && pkt_i.tready && pkt_i.tlast )
       if( state == ACC_S || state == IDLE_S )
         int_bytes_left <= unsent_bytes + rx_valid_bytes;
       else

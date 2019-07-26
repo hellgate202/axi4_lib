@@ -9,14 +9,15 @@ parameter int DATA_WIDTH     = 32;
 parameter int ID_WIDTH       = 1;
 parameter int DEST_WIDTH     = 1;
 parameter int USER_WIDTH     = 1;
-parameter int RANDOM_TVALID  = 1;
-parameter int RANDOM_TREADY  = 1;
+parameter int RANDOM_TVALID  = 0;
+parameter int RANDOM_TREADY  = 0;
 parameter int VERBOSE        = 0;
 
 parameter int MAX_PKT_SIZE_B = 1024;
 parameter int PKT_SIZE_WIDTH = $clog2( MAX_PKT_SIZE_B );
 
 parameter int CLK_T          = 5000;
+parameter int DATA_WIDTH_B   = DATA_WIDTH / 8;
 
 typedef bit [7 : 0] pkt_q [$];
 
@@ -24,11 +25,10 @@ bit                      clk;
 bit                      rst;
 bit [PKT_SIZE_WIDTH : 0] max_pkt_size;
 
-pkt_q tx_pkt;
-pkt_q rx_pkt;
-pkt_q ref_pkt;
+pkt_q                    tx_pkt;
 
-mailbox rx_data_mbx = new();
+mailbox rx_data_mbx  = new();
+mailbox ref_data_mbx = new();
 
 axi4_stream_if #(
   .DATA_WIDTH  ( DATA_WIDTH ),
@@ -73,7 +73,7 @@ task automatic clk_gen();
   forever
     begin
       #( CLK_T / 2 );
-      clk = ~clk;
+      clk = !clk;
     end
 
 endtask
@@ -98,7 +98,52 @@ function automatic pkt_q generate_pkt( int size );
 
 endfunction
 
-int predicted_pkts;
+function automatic void ref_model( pkt_q tx_pkt, int max_size );
+  pkt_q frag_pkt;
+  while( tx_pkt.size() > 0 )
+    begin
+      while( frag_pkt.size() != max_size )
+        begin
+          if( tx_pkt.size() == 0 )
+            break;
+          frag_pkt.push_back( tx_pkt.pop_front() );
+        end
+      ref_data_mbx.try_put( frag_pkt );
+      frag_pkt.delete(); 
+    end
+endfunction
+
+task automatic compare_mbx();
+
+  pkt_q rx_pkt;
+  pkt_q ref_pkt;
+
+  fork
+    forever
+      begin
+        if( rx_data_mbx.num() > 0 && ref_data_mbx.num() > 0 )
+          begin
+            rx_data_mbx.get( rx_pkt );
+            ref_data_mbx.get( ref_pkt );
+            if( rx_pkt != ref_pkt )
+              begin
+                $display( "Packet missmatch!" );
+                $display( "Received packet:" );
+                for( int i = 0; i < rx_pkt.size(); i++ )
+                  $write( "%0h ", rx_pkt[i] );
+                $write( "\n" );
+                $display( "Reference packet:" );
+                for( int i = 0; i < ref_pkt.size(); i++ )
+                  $write( "%0h ", ref_pkt[i] );
+                $write( "\n" );
+                $stop();
+              end
+          end
+        else
+          @( posedge clk );
+      end
+  join_none
+endtask
 
 axi4_stream_pkt_split #(
   .DATA_WIDTH     ( DATA_WIDTH     ),
@@ -122,46 +167,39 @@ initial
     fork
       clk_gen();
     join_none
+    compare_mbx();
     apply_rst();
     @( posedge clk );
-    for( int i = 1; i < 100; i++ )
+    for( int i = 1; i <= 4 * DATA_WIDTH_B; i++ )
       begin
         max_pkt_size = i;
-        for( int j = 1; j < 1000; j++ )
+        for( int j = 1; j <= 4 * DATA_WIDTH_B; j++ )
           begin
             tx_pkt = generate_pkt( j );
-            pkt_sender.send_pkt( tx_pkt );
-            if( j % i )
-              predicted_pkts = j / i + 1;
-            else
-              predicted_pkts = j / i;
-            repeat( predicted_pkts )
-              begin
-                @( pkt_receiver.pkt_end );
-                rx_data_mbx.get( rx_pkt );
-                if( rx_pkt.size() != i && rx_pkt.size() > tx_pkt.size() )
-                  begin
-                    $display( "Size is incorrect" );
-                    $display( "Should_be %0d", i );
-                    $display( "Was %0d", rx_pkt.size() );
-                    $stop();
-                  end
-                repeat( rx_pkt.size() )
-                  ref_pkt.push_back( tx_pkt.pop_front() );
-                  if( rx_pkt != ref_pkt )
-                    begin
-                      $display( "Wrong data" );
-                      $display( "Should be %p", ref_pkt );
-                      $display( "Was %p", rx_pkt );
-                      $stop();
-                    end
-                  ref_pkt.delete();
-              end
+            ref_model( tx_pkt, max_pkt_size );
+            pkt_sender.tx_data( tx_pkt );
           end
+        repeat( 100 )
+          @( posedge clk );
       end
     repeat( 100 )
+      begin
+        max_pkt_size = $urandom_range( 16, 1 );
+        repeat( 100 )
+          begin
+            tx_pkt = generate_pkt( $urandom_range( 16, 1 ) );
+            ref_model( tx_pkt, max_pkt_size );
+            pkt_sender.tx_data( tx_pkt );
+            tx_pkt = generate_pkt( $urandom_range( 32, 16 ) );
+            ref_model( tx_pkt, max_pkt_size );
+            pkt_sender.tx_data( tx_pkt );
+          end
+        repeat( 100 )
+          @( posedge clk );
+      end
+    repeat( 10 )
       @( posedge clk );
-    $display( "Everything is fine." );
+    $display( "Everthing is fine." );
     $stop();
   end
 
