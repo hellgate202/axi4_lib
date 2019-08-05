@@ -53,6 +53,7 @@ logic        [BYTE_CNT_WIDTH : 0]     tx_valid_bytes;
 // Start of packet logic
 logic                                 tlast_lock;
 logic                                 tfirst;
+logic        [PKT_SIZE_WIDTH : 0]     max_frag_size_locked;
 // Masked fragmented tlast
 logic        [DATA_WIDTH_B - 1 : 0]   tstrb_eof;
 logic        [DATA_WIDTH_B - 1 : 0]   tstrb_last_frag_eof;
@@ -92,31 +93,31 @@ always_comb
             if( pkt_i.tlast )
               next_state = EOP_S;
             else
-              if( ( rx_pkt_byte_cnt + unsent_bytes ) >= max_frag_size_i )
+              if( ( rx_pkt_byte_cnt + unsent_bytes ) >= max_frag_size_locked )
                 next_state = FRAG_FROM_UNSENT_S;
               else
-                if( ( rx_pkt_byte_cnt + DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] ) >= max_frag_size_i )
+                if( ( rx_pkt_byte_cnt + DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] ) >= max_frag_size_locked )
                   next_state = FRAG_FROM_INPUT_S;
         end
       FRAG_FROM_INPUT_S:
         begin
           if( pkt_i.tvalid && pkt_o.tready )
-            if( unsent_bytes > max_frag_size_i[BYTE_CNT_WIDTH : 0] )
+            if( unsent_bytes > max_frag_size_locked[BYTE_CNT_WIDTH : 0] )
               next_state = FRAG_FROM_UNSENT_S;
             else
               if( pkt_i.tlast )
                 next_state = EOP_S;
               else
-                if( max_frag_size_i > DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] )
+                if( max_frag_size_locked > DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] )
                   next_state = PASSTHROUGH_S;
         end
       FRAG_FROM_UNSENT_S:
         begin
           if( pkt_i.tvalid && pkt_o.tready )
-            if( max_frag_size_i > DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] )
+            if( max_frag_size_locked > DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] )
               next_state = PASSTHROUGH_S;
             else
-              if( unsent_bytes <= max_frag_size_i[BYTE_CNT_WIDTH : 0] )
+              if( unsent_bytes <= max_frag_size_locked[BYTE_CNT_WIDTH : 0] )
                 if( pkt_i.tlast )
                   next_state = EOP_S;
                 else
@@ -130,8 +131,8 @@ always_comb
     endcase
   end
 
-assign val_bytes_eof           = max_frag_size_i[BYTE_CNT_WIDTH - 1 : 0] ?
-                                 {1'b0, max_frag_size_i[BYTE_CNT_WIDTH - 1 : 0]} :
+assign val_bytes_eof           = max_frag_size_locked[BYTE_CNT_WIDTH - 1 : 0] ?
+                                 {1'b0, max_frag_size_locked[BYTE_CNT_WIDTH - 1 : 0]} :
                                  DATA_WIDTH_B[BYTE_CNT_WIDTH : 0];
 assign last_frag_val_bytes_eof = pkt_bytes_left[BYTE_CNT_WIDTH - 1 : 0] ?
                                  {1'b0, pkt_bytes_left[BYTE_CNT_WIDTH - 1 : 0]} :
@@ -162,23 +163,23 @@ always_ff @( posedge clk_i, posedge rst_i )
     unsent_bytes <= '0;
   else
     if( pkt_o.tready )
-      if( state == PASSTHROUGH_S && ( rx_pkt_byte_cnt + unsent_bytes ) >= max_frag_size_i &&
+      if( state == PASSTHROUGH_S && ( rx_pkt_byte_cnt + unsent_bytes ) >= max_frag_size_locked &&
           pkt_i.tvalid && !pkt_i.tlast )
         unsent_bytes <= unsent_bytes - DATA_WIDTH_B[BYTE_CNT_WIDTH : 0];
       else
         if( state == FRAG_FROM_UNSENT_S )
-          if( unsent_bytes > max_frag_size_i[BYTE_CNT_WIDTH : 0] &&
-              max_frag_size_i <= DATA_WIDTH_B[BYTE_CNT_WIDTH] )
-            unsent_bytes <= unsent_bytes - max_frag_size_i[BYTE_CNT_WIDTH : 0];
+          if( unsent_bytes > max_frag_size_locked[BYTE_CNT_WIDTH : 0] &&
+              max_frag_size_locked <= DATA_WIDTH_B[BYTE_CNT_WIDTH] )
+            unsent_bytes <= unsent_bytes - max_frag_size_locked[BYTE_CNT_WIDTH : 0];
           else
             unsent_bytes <= unsent_bytes + DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] - val_bytes_eof;
         else
           if( state == FRAG_FROM_INPUT_S && pkt_i.tvalid )
-            if( unsent_bytes > max_frag_size_i[BYTE_CNT_WIDTH : 0] )
-              if( max_frag_size_i > DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] )
+            if( unsent_bytes > max_frag_size_locked[BYTE_CNT_WIDTH : 0] )
+              if( max_frag_size_locked > DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] )
                 unsent_bytes <= unsent_bytes - DATA_WIDTH_B[BYTE_CNT_WIDTH : 0];
               else
-                unsent_bytes <= unsent_bytes - max_frag_size_i[BYTE_CNT_WIDTH : 0];
+                unsent_bytes <= unsent_bytes - max_frag_size_locked[BYTE_CNT_WIDTH : 0];
             else
               unsent_bytes <= unsent_bytes + DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] - val_bytes_eof;
           else
@@ -244,6 +245,13 @@ assign tfirst = tlast_lock && pkt_i.tvalid;
 
 always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
+    max_frag_size_locked <= '0;
+  else
+    if( tfirst && pkt_i.tready )
+      max_frag_size_locked <= max_frag_size_i;
+
+always_ff @( posedge clk_i, posedge rst_i )
+  if( rst_i )
     pkt_bytes_left <= '0;
   else
     if( pkt_i.tvalid && pkt_i.tready && pkt_i.tlast )
@@ -289,7 +297,7 @@ always_ff @( posedge clk_i, posedge rst_i )
     else
       if( pkt_o.tvalid && pkt_o.tready )
         if( pkt_o.tlast )
-          frag_avail_bytes <= max_frag_size_i;
+          frag_avail_bytes <= max_frag_size_locked;
         else
           frag_avail_bytes <= frag_avail_bytes - DATA_WIDTH_B[BYTE_CNT_WIDTH : 0];
 
@@ -333,9 +341,9 @@ always_comb
         tkeep_last_frag_eof[i] = 1'b0;
   end
 
-assign backpressure = state == PASSTHROUGH_S && ( rx_pkt_byte_cnt + unsent_bytes ) >= max_frag_size_i && !pkt_i.tlast && pkt_i.tvalid ||
-                      state == FRAG_FROM_INPUT_S && unsent_bytes > max_frag_size_i[BYTE_CNT_WIDTH : 0] && pkt_i.tvalid ||
-                      state == FRAG_FROM_UNSENT_S && unsent_bytes > max_frag_size_i[BYTE_CNT_WIDTH : 0] && max_frag_size_i <= DATA_WIDTH_B[PKT_SIZE_WIDTH - 1 : 0] ||
+assign backpressure = state == PASSTHROUGH_S && ( rx_pkt_byte_cnt + unsent_bytes ) >= max_frag_size_locked && !pkt_i.tlast && pkt_i.tvalid ||
+                      state == FRAG_FROM_INPUT_S && unsent_bytes > max_frag_size_locked[BYTE_CNT_WIDTH : 0] && pkt_i.tvalid ||
+                      state == FRAG_FROM_UNSENT_S && unsent_bytes > max_frag_size_locked[BYTE_CNT_WIDTH : 0] && max_frag_size_locked <= DATA_WIDTH_B[PKT_SIZE_WIDTH - 1 : 0] ||
                       state == EOP_S;
 
 assign pkt_i.tready = backpressure ? 1'b0 : pkt_o.tready;

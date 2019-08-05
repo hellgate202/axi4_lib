@@ -108,7 +108,7 @@ function automatic void ref_model( pkt_q tx_pkt, int max_size );
             break;
           frag_pkt.push_back( tx_pkt.pop_front() );
         end
-      ref_data_mbx.try_put( frag_pkt );
+      void'( ref_data_mbx.try_put( frag_pkt ) );
       frag_pkt.delete(); 
     end
 endfunction
@@ -179,8 +179,6 @@ initial
             ref_model( tx_pkt, max_frag_size );
             pkt_sender.tx_data( tx_pkt );
           end
-        repeat( 100 )
-          @( posedge clk );
       end
     repeat( 100 )
       begin
@@ -194,8 +192,6 @@ initial
             ref_model( tx_pkt, max_frag_size );
             pkt_sender.tx_data( tx_pkt );
           end
-        repeat( 100 )
-          @( posedge clk );
       end
     repeat( 10 )
       @( posedge clk );
