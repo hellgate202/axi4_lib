@@ -33,6 +33,14 @@ proc axi4_stream_pkt_frag {} {
   run -all
 }
 
+proc axi4_stream_shifter {} {
+  compile_src axi4_stream_shifter
+  vopt +acc tb_axi4_stream_shifter -o tb_axi4_stream_shifter_opt
+  vsim tb_axi4_stream_shifter_opt
+  draw_waveforms axi4_stream_shifter
+  run -all
+}
+
 proc axi4 {} {
   compile_src axi4
   vopt +acc axi4_example -o axi4_example_opt
@@ -47,6 +55,7 @@ proc help {} {
   echo "axi4_lite            - AXI4 Lite example."
   echo "axi4_stream          - AXI4 Stream example."
   echo "axi4_stream_pkt_frag - AXI4 Stream Packet Splitter Testbench"
+  echo "axi4_stream_shifter  - AXI4 Stream Byte Shifter"
   echo "Type help to repeat this message."
 }
 
