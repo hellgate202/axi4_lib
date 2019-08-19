@@ -1,3 +1,0 @@
-../src/interface/axi4_stream_if.sv
-../src/utility/axi4_stream_shifter.sv
-./axi4_stream_shifter/tb_axi4_stream_shifter.sv

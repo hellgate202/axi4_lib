@@ -1,4 +1,4 @@
-module axi4_stream_shifter #(
+module axi4_stream_byte_shift #(
   parameter int DATA_WIDTH     = 32,
   parameter int ID_WIDTH       = 1,
   parameter int DEST_WIDTH     = 1,
@@ -14,75 +14,23 @@ module axi4_stream_shifter #(
   axi4_stream_if                 pkt_o
 );
 
-logic [1 : 0][DATA_WIDTH - 1 : 0] tdata_buf;
+logic [1 : 0][DATA_WIDTH - 1 : 0]   tdata_buf;
 logic [1 : 0][DATA_WIDTH_B - 1 : 0] tstrb_buf;
 logic [1 : 0][DATA_WIDTH_B - 1 : 0] tkeep_buf;
-logic [1 : 0][DATA_WIDTH - 1 : 0] shifted_tdata_buf;
+logic [1 : 0][DATA_WIDTH - 1 : 0]   shifted_tdata_buf;
 logic [1 : 0][DATA_WIDTH_B - 1 : 0] shifted_tstrb_buf;
 logic [1 : 0][DATA_WIDTH_B - 1 : 0] shifted_tkeep_buf;
 logic [DATA_WIDTH_B - 1 : 0]        tstrb_masked_tlast;
 logic [DATA_WIDTH_B - 1 : 0]        tkeep_masked_tlast;
 logic [DATA_WIDTH_B - 1 : 0]        tstrb_masked_tfirst;
 logic [DATA_WIDTH_B - 1 : 0]        tkeep_masked_tfirst;
-logic [DATA_WIDTH_B_W : 0]        rx_bytes;
-logic [DATA_WIDTH_B_W : 0]        tx_bytes;
-logic [DATA_WIDTH_B_W : 0]        bytes_in_buf;
-logic                             tfirst;
-logic                             tlast_lock;
-logic                             tfirst_lock;
-logic                             backpressure;
-
-assign pkt_i.tready = pkt_o.tready && !backpressure;
-assign pkt_o.tvalid = bytes_in_buf >= DATA_WIDTH_B[DATA_WIDTH_B_W : 0] || tlast_lock && bytes_in_buf > 'd0;
-
-always_ff @( posedge clk_i, posedge rst_i )
-  if( rst_i )
-    begin
-      pkt_o.tid   <= '0;
-      pkt_o.tuser <= '0;
-      pkt_o.tdest <= '0;
-    end
-  else
-    if( pkt_i.tvalid && pkt_i.tready && tfirst )
-      begin
-        pkt_o.tid   <= pkt_i.tid;
-        pkt_o.tuser <= pkt_i.tuser;
-        pkt_o.tdest <= pkt_i.tdest;
-      end
-
-always_ff @( posedge clk_i, posedge rst_i )
-  if( rst_i )
-    tlast_lock <= 'd1;
-  else
-    if( pkt_i.tvalid && pkt_i.tready ) 
-      if( pkt_i.tlast )
-        tlast_lock <= 1'b1;
-      else
-        tlast_lock <= 1'b0;
-
-always_ff @( posedge clk_i, posedge rst_i )
-  if( rst_i )
-    tfirst_lock <= '0;
-  else
-    if( tfirst && pkt_i.tready )
-      tfirst_lock <= 1'b1;
-    else
-      if( pkt_o.tvalid && pkt_o.tready )
-        tfirst_lock <= 1'b0;
-
-always_ff @( posedge clk_i, posedge rst_i )
-  if( rst_i )
-    backpressure <= '0;
-  else
-    if( pkt_i.tvalid && pkt_i.tready && pkt_i.tlast &&
-        rx_bytes > ( DATA_WIDTH_B - shift_i ) )
-      backpressure <= 1'b1;
-    else
-      if( pkt_o.tvalid && pkt_o.tready )
-        backpressure <= 1'b0;
-
-assign tfirst = tlast_lock && pkt_i.tvalid;
-assign pkt_o.tlast = tlast_lock && bytes_in_buf == tx_bytes;
+logic [DATA_WIDTH_B_W : 0]          rx_bytes;
+logic [DATA_WIDTH_B_W : 0]          tx_bytes;
+logic [DATA_WIDTH_B_W : 0]          bytes_in_buf;
+logic                               tfirst;
+logic                               tlast_lock;
+logic                               tfirst_lock;
+logic                               backpressure;
 
 always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
@@ -101,6 +49,32 @@ always_ff @( posedge clk_i, posedge rst_i )
         tstrb_buf[1] <= pkt_i.tstrb;
         tstrb_buf[0] <= tstrb_buf[1];
       end
+
+always_ff @( posedge clk_i, posedge rst_i )
+  if( rst_i )
+    begin
+      pkt_o.tid   <= '0;
+      pkt_o.tuser <= '0;
+      pkt_o.tdest <= '0;
+    end
+  else
+    if( pkt_i.tvalid && pkt_i.tready && tfirst )
+      begin
+        pkt_o.tid   <= pkt_i.tid;
+        pkt_o.tuser <= pkt_i.tuser;
+        pkt_o.tdest <= pkt_i.tdest;
+      end
+
+always_ff @( posedge clk_i, posedge rst_i )
+  if( rst_i )
+    backpressure <= '0;
+  else
+    if( pkt_i.tvalid && pkt_i.tready && pkt_i.tlast &&
+        rx_bytes > ( DATA_WIDTH_B - shift_i ) )
+      backpressure <= 1'b1;
+    else
+      if( pkt_o.tvalid && pkt_o.tready )
+        backpressure <= 1'b0;
 
 always_comb
   begin
@@ -146,6 +120,28 @@ always_ff @( posedge clk_i, posedge rst_i )
         if( pkt_o.tready )
           bytes_in_buf <= bytes_in_buf - tx_bytes;
 
+always_ff @( posedge clk_i, posedge rst_i )
+  if( rst_i )
+    tlast_lock <= 'd1;
+  else
+    if( pkt_i.tvalid && pkt_i.tready ) 
+      if( pkt_i.tlast )
+        tlast_lock <= 1'b1;
+      else
+        tlast_lock <= 1'b0;
+
+assign tfirst = tlast_lock && pkt_i.tvalid;
+
+always_ff @( posedge clk_i, posedge rst_i )
+  if( rst_i )
+    tfirst_lock <= '0;
+  else
+    if( tfirst && pkt_i.tready )
+      tfirst_lock <= 1'b1;
+    else
+      if( pkt_o.tvalid && pkt_o.tready )
+        tfirst_lock <= 1'b0;
+
 always_comb
   begin
     tkeep_masked_tlast = '0;
@@ -162,13 +158,18 @@ assign tkeep_masked_tfirst = tkeep_buf[1] << shift_i;
 assign tstrb_masked_tfirst = tstrb_buf[1] << shift_i;
 
 
-assign shifted_tdata_buf = tdata_buf << ( shift_i * 8 );
-assign shifted_tstrb_buf = tstrb_buf << shift_i;
-assign shifted_tkeep_buf = tkeep_buf << shift_i;
-assign pkt_o.tdata       = shifted_tdata_buf[1];
-assign pkt_o.tkeep       = tfirst_lock ? tkeep_masked_tfirst : 
-                           pkt_o.tlast ? tkeep_masked_tlast : shifted_tkeep_buf[1];
-assign pkt_o.tstrb       = tfirst_lock ? tstrb_masked_tfirst:
-                           pkt_o.tlast ? tstrb_masked_tlast : shifted_tstrb_buf[1];
+assign shifted_tdata_buf   = tdata_buf << ( shift_i * 8 );
+assign shifted_tstrb_buf   = tstrb_buf << shift_i;
+assign shifted_tkeep_buf   = tkeep_buf << shift_i;
+
+assign pkt_o.tdata         = shifted_tdata_buf[1];
+assign pkt_o.tkeep         = tfirst_lock ? tkeep_masked_tfirst : 
+                             pkt_o.tlast ? tkeep_masked_tlast : shifted_tkeep_buf[1];
+assign pkt_o.tstrb         = tfirst_lock ? tstrb_masked_tfirst:
+                             pkt_o.tlast ? tstrb_masked_tlast : shifted_tstrb_buf[1];
+assign pkt_i.tready        = pkt_o.tready && !backpressure;
+assign pkt_o.tvalid        = bytes_in_buf >= DATA_WIDTH_B[DATA_WIDTH_B_W : 0] || 
+                             tlast_lock && bytes_in_buf > 'd0;
+assign pkt_o.tlast         = tlast_lock && bytes_in_buf == tx_bytes;
 
 endmodule

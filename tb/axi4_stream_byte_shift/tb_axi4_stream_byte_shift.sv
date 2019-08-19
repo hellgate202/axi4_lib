@@ -3,7 +3,7 @@
 
 `timescale 1 ps / 1 ps
 
-module tb_axi4_stream_shifter;
+module tb_axi4_stream_byte_shift;
 
 parameter int DATA_WIDTH     = 32;
 parameter int ID_WIDTH       = 1;
@@ -142,7 +142,7 @@ function automatic pkt_q generate_pkt( int size );
 
 endfunction
 
-axi4_stream_shifter #(
+axi4_stream_byte_shift #(
   .DATA_WIDTH ( DATA_WIDTH ),
   .ID_WIDTH   ( ID_WIDTH   ),
   .DEST_WIDTH ( DEST_WIDTH ),
@@ -150,7 +150,7 @@ axi4_stream_shifter #(
 ) DUT (
   .clk_i      ( clk        ),
   .rst_i      ( rst        ),
-  .shift_i    ( 'd2        ),
+  .shift_i    ( 'd3        ),
   .pkt_i      ( rx_if      ),
   .pkt_o      ( tx_if      )
 );
