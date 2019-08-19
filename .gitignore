@@ -1,4 +1,4 @@
 *.swp
-example/transcript
-example/work/
-example/vsim.wlf
+tb/transcript
+tb/work/
+tb/vsim.wlf
