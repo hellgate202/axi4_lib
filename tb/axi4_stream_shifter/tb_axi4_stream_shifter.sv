@@ -9,8 +9,8 @@ parameter int DATA_WIDTH     = 32;
 parameter int ID_WIDTH       = 1;
 parameter int DEST_WIDTH     = 1;
 parameter int USER_WIDTH     = 1;
-parameter int RANDOM_TVALID  = 0;
-parameter int RANDOM_TREADY  = 0;
+parameter int RANDOM_TVALID  = 1;
+parameter int RANDOM_TREADY  = 1;
 parameter int VERBOSE        = 0;
 
 parameter int MAX_PKT_SIZE_B = 1024;
@@ -98,15 +98,6 @@ task automatic check_pkts();
           rx_data_mbx.get( rx_pkt );
           for( int i = 0; i < tx_pkt_pool.size(); i++ )
             begin
-                  $display( "tx_pkt_pool: " );
-                  for( int j = 0; j < tx_pkt_pool.size(); j++ )
-                    begin
-                      $display( "%0d:", j );
-                      for( int k = 0; k < tx_pkt_pool[j].size(); k++ )
-                        $write( "%0h ", tx_pkt_pool[j][k] );
-                      $write( "\n" );
-                    end
-
               if( rx_pkt == tx_pkt_pool[i] )
                 begin
                   tx_pkt_pool.delete( i );
@@ -175,15 +166,28 @@ initial
     join_none
     apply_rst();
     @( posedge clk );
-    for( int i = 1; i < 100; i++ )
+    for( int i = 1; i < 10000; i++ )
       begin
-        tx_pkt = generate_pkt( $urandom_range( 8 ) );
+        tx_pkt = generate_pkt( $urandom_range( 8, 1 ) );
         tx_pkt_pool.push_back( tx_pkt );
         pkt_sender.tx_data( tx_pkt );
       end
     repeat( 10 )
       @( posedge clk );
-    $display( "Everthing is fine." );
+    if( tx_pkt_pool.size() == 0 && rx_data_mbx.num() == 0 )
+      $display( "Everything is fine" );
+    else
+      begin
+        $display( "Everything is not fine" );
+        $display( "tx_pkt_pool: " );
+        for( int j = 0; j < tx_pkt_pool.size(); j++ )
+          begin
+            $display( "%0d:", j );
+            for( int k = 0; k < tx_pkt_pool[j].size(); k++ )
+              $write( "%0h ", tx_pkt_pool[j][k] );
+            $write( "\n" );
+          end
+      end
     $stop();
   end
 

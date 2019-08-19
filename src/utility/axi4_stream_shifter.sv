@@ -82,7 +82,7 @@ always_ff @( posedge clk_i, posedge rst_i )
         backpressure <= 1'b0;
 
 assign tfirst = tlast_lock && pkt_i.tvalid;
-assign pkt_o.tlast = tlast_lock && bytes_in_buf <= DATA_WIDTH_B[DATA_WIDTH_B_W : 0] && bytes_in_buf > 'd0;
+assign pkt_o.tlast = tlast_lock && bytes_in_buf == tx_bytes;
 
 always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
@@ -158,17 +158,9 @@ always_comb
         end
   end
 
-always_comb
-  begin
-    tkeep_masked_tfirst = '0;
-    tstrb_masked_tfirst = '0;
-    for( int i = 0; i < DATA_WIDTH_B; i++ )
-      if( i < tx_bytes )
-        begin
-          tkeep_masked_tfirst[DATA_WIDTH_B - 1 - i] = shifted_tkeep_buf[1][DATA_WIDTH_B - 1 - i];
-          tstrb_masked_tfirst[DATA_WIDTH_B - 1 - i] = shifted_tstrb_buf[1][DATA_WIDTH_B - 1 - i];
-        end
-  end
+assign tkeep_masked_tfirst = tkeep_buf[1] << shift_i;
+assign tstrb_masked_tfirst = tstrb_buf[1] << shift_i;
+
 
 assign shifted_tdata_buf = tdata_buf << ( shift_i * 8 );
 assign shifted_tstrb_buf = tstrb_buf << shift_i;
@@ -176,7 +168,7 @@ assign shifted_tkeep_buf = tkeep_buf << shift_i;
 assign pkt_o.tdata       = shifted_tdata_buf[1];
 assign pkt_o.tkeep       = tfirst_lock ? tkeep_masked_tfirst : 
                            pkt_o.tlast ? tkeep_masked_tlast : shifted_tkeep_buf[1];
-assign pkt_o.tstrb       = tfirst_lock ? tstrb_masked_tfirst :
+assign pkt_o.tstrb       = tfirst_lock ? tstrb_masked_tfirst:
                            pkt_o.tlast ? tstrb_masked_tlast : shifted_tstrb_buf[1];
 
 endmodule
