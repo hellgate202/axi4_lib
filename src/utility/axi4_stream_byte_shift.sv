@@ -5,7 +5,6 @@ module axi4_stream_byte_shift #(
   parameter int USER_WIDTH     = 1,
   parameter int DATA_WIDTH_B   = DATA_WIDTH / 8,
   parameter int DATA_WIDTH_B_W = $clog2( DATA_WIDTH_B )
-
 )(
   input                          clk_i,
   input                          rst_i,
@@ -20,6 +19,7 @@ logic [1 : 0][DATA_WIDTH_B - 1 : 0] tkeep_buf;
 logic [1 : 0][DATA_WIDTH - 1 : 0]   shifted_tdata_buf;
 logic [1 : 0][DATA_WIDTH_B - 1 : 0] shifted_tstrb_buf;
 logic [1 : 0][DATA_WIDTH_B - 1 : 0] shifted_tkeep_buf;
+logic                               move_data;
 logic [DATA_WIDTH_B - 1 : 0]        tstrb_masked_tlast;
 logic [DATA_WIDTH_B - 1 : 0]        tkeep_masked_tlast;
 logic [DATA_WIDTH_B - 1 : 0]        tstrb_masked_tfirst;
@@ -31,6 +31,10 @@ logic                               tfirst;
 logic                               tlast_lock;
 logic                               tfirst_lock;
 logic                               backpressure;
+logic [DATA_WIDTH_B_W - 1 : 0]      shift_lock;
+logic [DATA_WIDTH_B_W - 1 : 0]      shift_value;
+
+assign move_data = pkt_i.tvalid && pkt_i.tready || backpressure && pkt_o.tready;
 
 always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
@@ -40,7 +44,7 @@ always_ff @( posedge clk_i, posedge rst_i )
       tstrb_buf <= '0;
     end
   else
-    if( pkt_i.tvalid && pkt_i.tready || backpressure && pkt_o.tready )
+    if( move_data )
       begin
         tdata_buf[1] <= pkt_i.tdata;
         tdata_buf[0] <= tdata_buf[1];
@@ -50,6 +54,15 @@ always_ff @( posedge clk_i, posedge rst_i )
         tstrb_buf[0] <= tstrb_buf[1];
       end
 
+assign shifted_tdata_buf = tdata_buf << ( shift_value * 8 );
+assign shifted_tstrb_buf = tstrb_buf << shift_value;
+assign shifted_tkeep_buf = tkeep_buf << shift_value;
+
+// Currently I have no idea what to do with this signals
+// I usually use tuser not as multiply of bytes in tdata but 
+// as 1 bit signal, and I don't know how to split it, if the first
+// word of the packet does. So, for now, I just remember the value in
+// the first word and keep it for entire packet.
 always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
     begin
@@ -65,40 +78,58 @@ always_ff @( posedge clk_i, posedge rst_i )
         pkt_o.tdest <= pkt_i.tdest;
       end
 
+// Backpressure is asserted when we need an additional transaction
+// which appeared because of the byte shift
 always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
     backpressure <= '0;
   else
     if( pkt_i.tvalid && pkt_i.tready && pkt_i.tlast &&
-        rx_bytes > ( DATA_WIDTH_B - shift_i ) )
+        rx_bytes > ( DATA_WIDTH_B[DATA_WIDTH_B_W - 1 : 0] - shift_value ) )
       backpressure <= 1'b1;
     else
       if( pkt_o.tvalid && pkt_o.tready )
         backpressure <= 1'b0;
 
+// We remember shift value at the begining of the packet
+always_ff @( posedge clk_i, posedge rst_i )
+  if( rst_i )
+    shift_lock <= '0;
+  else
+    if( pkt_i.tvalid && pkt_i.tready && tfirst )
+      shift_lock <= shift_i;
+
+assign shift_value = tfirst ? shift_i : shift_lock;
+
+// First and last transactions contain as much bytes as the position of left most one
+// in tkeep signal, i.e. we keep all bytes before as significant and we don't
+// have logic to discard them
 always_comb
   begin
     rx_bytes = '0;
     if( pkt_i.tvalid )
-      if( pkt_i.tlast )
+      if( tfirst || pkt_i.tlast )
         begin
-          for( int i = 0; i < DATA_WIDTH_B; i++ )
-            if( pkt_i.tstrb[i] || pkt_i.tkeep[i] )
-              rx_bytes++;
+          for( integer lmo = 0; lmo < DATA_WIDTH_B; lmo++ )
+            if( pkt_i.tkeep[lmo] )
+              rx_bytes = lmo[DATA_WIDTH_B_W : 0] + 1'b1;
         end
       else
         rx_bytes = DATA_WIDTH_B[DATA_WIDTH_B_W : 0];
   end
 
+// In first word we transmit up to such amount of words that was left after
+// shift, but could be lower if packet has only one word and this word is
+// lower than maximum amount of words minus shift
 always_comb
   begin
     tx_bytes = '0;
     if( bytes_in_buf > '0 )
       if( tfirst_lock )
-        if( bytes_in_buf <= ( DATA_WIDTH_B[DATA_WIDTH_B_W : 0] - shift_i ) )
+        if( bytes_in_buf <= ( DATA_WIDTH_B[DATA_WIDTH_B_W : 0] - shift_value ) )
           tx_bytes = bytes_in_buf;
         else
-          tx_bytes = DATA_WIDTH_B[DATA_WIDTH_B_W : 0] - shift_i;
+          tx_bytes = DATA_WIDTH_B[DATA_WIDTH_B_W : 0] - shift_value;
       else
         if( bytes_in_buf > DATA_WIDTH_B[DATA_WIDTH_B_W : 0] )
           tx_bytes = DATA_WIDTH_B[DATA_WIDTH_B_W : 0];
@@ -120,6 +151,8 @@ always_ff @( posedge clk_i, posedge rst_i )
         if( pkt_o.tready )
           bytes_in_buf <= bytes_in_buf - tx_bytes;
 
+// Used to determine first word of the next packet and
+// to declare that incoming packet has ended
 always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
     tlast_lock <= 'd1;
@@ -132,6 +165,7 @@ always_ff @( posedge clk_i, posedge rst_i )
 
 assign tfirst = tlast_lock && pkt_i.tvalid;
 
+// Shows that we are currently sending first word
 always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
     tfirst_lock <= '0;
@@ -142,6 +176,9 @@ always_ff @( posedge clk_i, posedge rst_i )
       if( pkt_o.tvalid && pkt_o.tready )
         tfirst_lock <= 1'b0;
 
+// The last word tstrb and tkeep signals must be masked,
+// because we shift incoming values from two incoming words, and
+// after shift there coulde be bits from the next packet
 always_comb
   begin
     tkeep_masked_tlast = '0;
@@ -154,13 +191,8 @@ always_comb
         end
   end
 
-assign tkeep_masked_tfirst = tkeep_buf[1] << shift_i;
-assign tstrb_masked_tfirst = tstrb_buf[1] << shift_i;
-
-
-assign shifted_tdata_buf   = tdata_buf << ( shift_i * 8 );
-assign shifted_tstrb_buf   = tstrb_buf << shift_i;
-assign shifted_tkeep_buf   = tkeep_buf << shift_i;
+assign tkeep_masked_tfirst = tkeep_buf[1] << shift_value;
+assign tstrb_masked_tfirst = tstrb_buf[1] << shift_value;
 
 assign pkt_o.tdata         = shifted_tdata_buf[1];
 assign pkt_o.tkeep         = tfirst_lock ? tkeep_masked_tfirst : 
