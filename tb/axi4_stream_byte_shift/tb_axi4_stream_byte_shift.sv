@@ -5,7 +5,7 @@
 
 module tb_axi4_stream_byte_shift;
 
-parameter int DATA_WIDTH     = 32;
+parameter int DATA_WIDTH     = 128;
 parameter int ID_WIDTH       = 1;
 parameter int DEST_WIDTH     = 1;
 parameter int USER_WIDTH     = 1;
@@ -14,18 +14,21 @@ parameter int RANDOM_TREADY  = 1;
 parameter int VERBOSE        = 0;
 
 parameter int MAX_PKT_SIZE_B = 1024;
-parameter int PKT_SIZE_WIDTH = $clog2( MAX_PKT_SIZE_B );
+parameter int MIN_PKT_SIZE_B = 1;
+parameter int PKTS_AMOUNT    = 1000;
 
 parameter int CLK_T          = 5000;
 parameter int DATA_WIDTH_B   = DATA_WIDTH / 8;
+parameter int DATA_WIDTH_B_W = $clog2( DATA_WIDTH_B );
 
 typedef bit [7 : 0] pkt_q [$];
 
-bit                      clk;
-bit                      rst;
+bit                          clk;
+bit                          rst;
+bit [DATA_WIDTH_B_W - 1 : 0] shift;
 
-pkt_q                    tx_pkt;
-pkt_q                    tx_pkt_pool[$];
+pkt_q                        tx_pkt;
+pkt_q                        tx_pkt_pool[$];
 
 mailbox rx_data_mbx  = new();
 mailbox ref_data_mbx = new();
@@ -150,7 +153,7 @@ axi4_stream_byte_shift #(
 ) DUT (
   .clk_i      ( clk        ),
   .rst_i      ( rst        ),
-  .shift_i    ( 'd3        ),
+  .shift_i    ( shift      ),
   .pkt_i      ( rx_if      ),
   .pkt_o      ( tx_if      )
 );
@@ -166,11 +169,15 @@ initial
     join_none
     apply_rst();
     @( posedge clk );
-    for( int i = 1; i < 10000; i++ )
+    for( int i = 0; i < DATA_WIDTH_B; i++ )
       begin
-        tx_pkt = generate_pkt( $urandom_range( 8, 1 ) );
-        tx_pkt_pool.push_back( tx_pkt );
-        pkt_sender.tx_data( tx_pkt );
+        shift = i;
+        for( int i = 1; i < PKTS_AMOUNT; i++ )
+          begin
+            tx_pkt = generate_pkt( $urandom_range( MAX_PKT_SIZE_B, MIN_PKT_SIZE_B ) );
+            tx_pkt_pool.push_back( tx_pkt );
+            pkt_sender.tx_data( tx_pkt );
+          end
       end
     repeat( 10 )
       @( posedge clk );

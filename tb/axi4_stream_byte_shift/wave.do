@@ -15,13 +15,14 @@ add wave -noupdate /tb_axi4_stream_byte_shift/DUT/pkt_i/tuser
 add wave -noupdate -divider DUT
 add wave -noupdate /tb_axi4_stream_byte_shift/DUT/clk_i
 add wave -noupdate /tb_axi4_stream_byte_shift/DUT/rst_i
-add wave -noupdate -radix unsigned /tb_axi4_stream_byte_shift/DUT/shift_i
-add wave -noupdate -radix hexadecimal /tb_axi4_stream_byte_shift/DUT/tdata_buf
+add wave -noupdate /tb_axi4_stream_byte_shift/DUT/shift_i
+add wave -noupdate /tb_axi4_stream_byte_shift/DUT/tdata_buf
 add wave -noupdate -radix binary /tb_axi4_stream_byte_shift/DUT/tstrb_buf
 add wave -noupdate -radix binary /tb_axi4_stream_byte_shift/DUT/tkeep_buf
-add wave -noupdate -radix hexadecimal /tb_axi4_stream_byte_shift/DUT/shifted_tdata_buf
+add wave -noupdate /tb_axi4_stream_byte_shift/DUT/shifted_tdata_buf
 add wave -noupdate -radix binary /tb_axi4_stream_byte_shift/DUT/shifted_tstrb_buf
 add wave -noupdate -radix binary /tb_axi4_stream_byte_shift/DUT/shifted_tkeep_buf
+add wave -noupdate /tb_axi4_stream_byte_shift/DUT/move_data
 add wave -noupdate -radix binary /tb_axi4_stream_byte_shift/DUT/tstrb_masked_tlast
 add wave -noupdate -radix binary /tb_axi4_stream_byte_shift/DUT/tkeep_masked_tlast
 add wave -noupdate -radix binary /tb_axi4_stream_byte_shift/DUT/tstrb_masked_tfirst
@@ -29,10 +30,16 @@ add wave -noupdate -radix binary /tb_axi4_stream_byte_shift/DUT/tkeep_masked_tfi
 add wave -noupdate -radix unsigned /tb_axi4_stream_byte_shift/DUT/rx_bytes
 add wave -noupdate -radix unsigned /tb_axi4_stream_byte_shift/DUT/tx_bytes
 add wave -noupdate -radix unsigned /tb_axi4_stream_byte_shift/DUT/bytes_in_buf
-add wave -noupdate /tb_axi4_stream_byte_shift/DUT/tfirst
-add wave -noupdate /tb_axi4_stream_byte_shift/DUT/tlast_lock
-add wave -noupdate /tb_axi4_stream_byte_shift/DUT/tfirst_lock
+add wave -noupdate -radix unsigned /tb_axi4_stream_byte_shift/DUT/bytes_in_buf_comb
+add wave -noupdate /tb_axi4_stream_byte_shift/DUT/pkt_i_tfirst
+add wave -noupdate /tb_axi4_stream_byte_shift/DUT/pkt_i_tlast_lock
+add wave -noupdate /tb_axi4_stream_byte_shift/DUT/pkt_i_tfirst_lock
+add wave -noupdate /tb_axi4_stream_byte_shift/DUT/pkt_o_tfirst
+add wave -noupdate /tb_axi4_stream_byte_shift/DUT/pkt_o_tlast_lock
+add wave -noupdate /tb_axi4_stream_byte_shift/DUT/pkt_o_tfirst_lock
 add wave -noupdate /tb_axi4_stream_byte_shift/DUT/backpressure
+add wave -noupdate /tb_axi4_stream_byte_shift/DUT/shift_lock
+add wave -noupdate /tb_axi4_stream_byte_shift/DUT/shift_value
 add wave -noupdate -divider pkt_o
 add wave -noupdate /tb_axi4_stream_byte_shift/DUT/pkt_o/aclk
 add wave -noupdate /tb_axi4_stream_byte_shift/DUT/pkt_o/aresetn
@@ -62,4 +69,4 @@ configure wave -griddelta 40
 configure wave -timeline 0
 configure wave -timelineunits ps
 update
-WaveRestoreZoom {0 ps} {300502125 ps}
+WaveRestoreZoom {0 ps} {821569875 ps}

@@ -26,10 +26,13 @@ logic [DATA_WIDTH_B - 1 : 0]        tstrb_masked_tfirst;
 logic [DATA_WIDTH_B - 1 : 0]        tkeep_masked_tfirst;
 logic [DATA_WIDTH_B_W : 0]          rx_bytes;
 logic [DATA_WIDTH_B_W : 0]          tx_bytes;
-logic [DATA_WIDTH_B_W : 0]          bytes_in_buf;
-logic                               tfirst;
-logic                               tlast_lock;
-logic                               tfirst_lock;
+logic [DATA_WIDTH_B_W + 1 : 0]      bytes_in_buf, bytes_in_buf_comb;
+logic                               pkt_i_tfirst;
+logic                               pkt_i_tlast_lock;
+logic                               pkt_i_tfirst_lock;
+logic                               pkt_o_tfirst;
+logic                               pkt_o_tlast_lock;
+logic                               pkt_o_tfirst_lock;
 logic                               backpressure;
 logic [DATA_WIDTH_B_W - 1 : 0]      shift_lock;
 logic [DATA_WIDTH_B_W - 1 : 0]      shift_value;
@@ -58,7 +61,7 @@ assign shifted_tdata_buf = tdata_buf << ( shift_value * 8 );
 assign shifted_tstrb_buf = tstrb_buf << shift_value;
 assign shifted_tkeep_buf = tkeep_buf << shift_value;
 
-// Currently I have no idea what to do with this signals
+// Currently I have no idea what to do with these signals
 // I usually use tuser not as multiply of bytes in tdata but 
 // as 1 bit signal, and I don't know how to split it, if the first
 // word of the packet does. So, for now, I just remember the value in
@@ -71,7 +74,7 @@ always_ff @( posedge clk_i, posedge rst_i )
       pkt_o.tdest <= '0;
     end
   else
-    if( pkt_i.tvalid && pkt_i.tready && tfirst )
+    if( pkt_i.tvalid && pkt_i.tready && pkt_i_tfirst )
       begin
         pkt_o.tid   <= pkt_i.tid;
         pkt_o.tuser <= pkt_i.tuser;
@@ -85,7 +88,7 @@ always_ff @( posedge clk_i, posedge rst_i )
     backpressure <= '0;
   else
     if( pkt_i.tvalid && pkt_i.tready && pkt_i.tlast &&
-        rx_bytes > ( DATA_WIDTH_B[DATA_WIDTH_B_W - 1 : 0] - shift_value ) )
+        ( ( bytes_in_buf_comb + shift_value ) > DATA_WIDTH_B[DATA_WIDTH_B_W : 0] ) )
       backpressure <= 1'b1;
     else
       if( pkt_o.tvalid && pkt_o.tready )
@@ -96,10 +99,10 @@ always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
     shift_lock <= '0;
   else
-    if( pkt_i.tvalid && pkt_i.tready && tfirst )
+    if( pkt_i.tvalid && pkt_i.tready && pkt_i_tfirst )
       shift_lock <= shift_i;
 
-assign shift_value = tfirst ? shift_i : shift_lock;
+assign shift_value = ( pkt_i_tfirst_lock && pkt_i.tready ) ? shift_i : shift_lock;
 
 // First and last transactions contain as much bytes as the position of left most one
 // in tkeep signal, i.e. we keep all bytes before as significant and we don't
@@ -108,7 +111,7 @@ always_comb
   begin
     rx_bytes = '0;
     if( pkt_i.tvalid )
-      if( tfirst || pkt_i.tlast )
+      if( pkt_i_tfirst || pkt_i.tlast )
         begin
           for( integer lmo = 0; lmo < DATA_WIDTH_B; lmo++ )
             if( pkt_i.tkeep[lmo] )
@@ -125,16 +128,16 @@ always_comb
   begin
     tx_bytes = '0;
     if( bytes_in_buf > '0 )
-      if( tfirst_lock )
+      if( pkt_o_tfirst )
         if( bytes_in_buf <= ( DATA_WIDTH_B[DATA_WIDTH_B_W : 0] - shift_value ) )
           tx_bytes = bytes_in_buf;
         else
           tx_bytes = DATA_WIDTH_B[DATA_WIDTH_B_W : 0] - shift_value;
       else
-        if( bytes_in_buf > DATA_WIDTH_B[DATA_WIDTH_B_W : 0] )
+        if( bytes_in_buf >= DATA_WIDTH_B[DATA_WIDTH_B_W : 0] )
           tx_bytes = DATA_WIDTH_B[DATA_WIDTH_B_W : 0];
         else
-          if( tlast_lock )
+          if( pkt_i_tlast_lock )
             tx_bytes = bytes_in_buf;
   end
 
@@ -142,39 +145,67 @@ always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
     bytes_in_buf <= '0;
   else
+    bytes_in_buf <= bytes_in_buf_comb;
+
+always_comb
+  begin
+    bytes_in_buf_comb = bytes_in_buf;
     if( pkt_i.tready && pkt_o.tready )
-      bytes_in_buf <= bytes_in_buf + rx_bytes - tx_bytes;
+      bytes_in_buf_comb = bytes_in_buf + rx_bytes - tx_bytes;
     else
       if( pkt_i.tready )
-        bytes_in_buf <= bytes_in_buf + rx_bytes;
+        bytes_in_buf_comb = bytes_in_buf + rx_bytes;
       else
         if( pkt_o.tready )
-          bytes_in_buf <= bytes_in_buf - tx_bytes;
+          bytes_in_buf_comb = bytes_in_buf - tx_bytes;
+  end
 
 // Used to determine first word of the next packet and
 // to declare that incoming packet has ended
 always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
-    tlast_lock <= 'd1;
+    pkt_i_tlast_lock <= 'd1;
   else
     if( pkt_i.tvalid && pkt_i.tready ) 
       if( pkt_i.tlast )
-        tlast_lock <= 1'b1;
+        pkt_i_tlast_lock <= 1'b1;
       else
-        tlast_lock <= 1'b0;
+        pkt_i_tlast_lock <= 1'b0;
 
-assign tfirst = tlast_lock && pkt_i.tvalid;
+assign pkt_i_tfirst = pkt_i_tlast_lock && pkt_i.tvalid;
+
+always_ff @( posedge clk_i, posedge rst_i )
+  if( rst_i )
+    pkt_o_tlast_lock <= 'd1;
+  else
+    if( pkt_o.tvalid && pkt_o.tready ) 
+      if( pkt_o.tlast )
+        pkt_o_tlast_lock <= 1'b1;
+      else
+        pkt_o_tlast_lock <= 1'b0;
+
+assign pkt_o_tfirst = pkt_o_tlast_lock && pkt_o.tvalid;
 
 // Shows that we are currently sending first word
 always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
-    tfirst_lock <= '0;
+    pkt_i_tfirst_lock <= '0;
   else
-    if( tfirst && pkt_i.tready )
-      tfirst_lock <= 1'b1;
+    if( pkt_i_tfirst && pkt_i.tready )
+      pkt_i_tfirst_lock <= 1'b1;
     else
-      if( pkt_o.tvalid && pkt_o.tready )
-        tfirst_lock <= 1'b0;
+      if( pkt_i.tready )
+        pkt_i_tfirst_lock <= 1'b0;
+
+always_ff @( posedge clk_i, posedge rst_i )
+  if( rst_i )
+    pkt_o_tfirst_lock <= '0;
+  else
+    if( pkt_o_tfirst && pkt_o.tready )
+      pkt_o_tfirst_lock <= 1'b1;
+    else
+      if( pkt_o.tready )
+        pkt_o_tfirst_lock <= 1'b0;
 
 // The last word tstrb and tkeep signals must be masked,
 // because we shift incoming values from two incoming words, and
@@ -195,13 +226,13 @@ assign tkeep_masked_tfirst = tkeep_buf[1] << shift_value;
 assign tstrb_masked_tfirst = tstrb_buf[1] << shift_value;
 
 assign pkt_o.tdata         = shifted_tdata_buf[1];
-assign pkt_o.tkeep         = tfirst_lock ? tkeep_masked_tfirst : 
+assign pkt_o.tkeep         = pkt_o_tfirst ? tkeep_masked_tfirst : 
                              pkt_o.tlast ? tkeep_masked_tlast : shifted_tkeep_buf[1];
-assign pkt_o.tstrb         = tfirst_lock ? tstrb_masked_tfirst:
+assign pkt_o.tstrb         = pkt_o_tfirst ? tstrb_masked_tfirst:
                              pkt_o.tlast ? tstrb_masked_tlast : shifted_tstrb_buf[1];
 assign pkt_i.tready        = pkt_o.tready && !backpressure;
 assign pkt_o.tvalid        = bytes_in_buf >= DATA_WIDTH_B[DATA_WIDTH_B_W : 0] || 
-                             tlast_lock && bytes_in_buf > 'd0;
-assign pkt_o.tlast         = tlast_lock && bytes_in_buf == tx_bytes;
+                             pkt_i_tlast_lock && bytes_in_buf > 'd0;
+assign pkt_o.tlast         = pkt_i_tlast_lock && bytes_in_buf == tx_bytes;
 
 endmodule
