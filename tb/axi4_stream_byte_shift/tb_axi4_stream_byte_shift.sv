@@ -13,7 +13,7 @@ parameter int RANDOM_TVALID  = 1;
 parameter int RANDOM_TREADY  = 1;
 parameter int VERBOSE        = 0;
 
-parameter int MAX_PKT_SIZE_B = 1024;
+parameter int MAX_PKT_SIZE_B = 48;
 parameter int MIN_PKT_SIZE_B = 1;
 parameter int PKTS_AMOUNT    = 1000;
 

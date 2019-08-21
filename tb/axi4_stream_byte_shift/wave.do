@@ -32,14 +32,9 @@ add wave -noupdate -radix unsigned /tb_axi4_stream_byte_shift/DUT/tx_bytes
 add wave -noupdate -radix unsigned /tb_axi4_stream_byte_shift/DUT/bytes_in_buf
 add wave -noupdate -radix unsigned /tb_axi4_stream_byte_shift/DUT/bytes_in_buf_comb
 add wave -noupdate /tb_axi4_stream_byte_shift/DUT/pkt_i_tfirst
-add wave -noupdate /tb_axi4_stream_byte_shift/DUT/pkt_i_tlast_lock
-add wave -noupdate /tb_axi4_stream_byte_shift/DUT/pkt_i_tfirst_lock
 add wave -noupdate /tb_axi4_stream_byte_shift/DUT/pkt_o_tfirst
-add wave -noupdate /tb_axi4_stream_byte_shift/DUT/pkt_o_tlast_lock
-add wave -noupdate /tb_axi4_stream_byte_shift/DUT/pkt_o_tfirst_lock
 add wave -noupdate /tb_axi4_stream_byte_shift/DUT/backpressure
 add wave -noupdate /tb_axi4_stream_byte_shift/DUT/shift_lock
-add wave -noupdate /tb_axi4_stream_byte_shift/DUT/shift_value
 add wave -noupdate -divider pkt_o
 add wave -noupdate /tb_axi4_stream_byte_shift/DUT/pkt_o/aclk
 add wave -noupdate /tb_axi4_stream_byte_shift/DUT/pkt_o/aresetn
@@ -53,7 +48,7 @@ add wave -noupdate /tb_axi4_stream_byte_shift/DUT/pkt_o/tid
 add wave -noupdate /tb_axi4_stream_byte_shift/DUT/pkt_o/tdest
 add wave -noupdate /tb_axi4_stream_byte_shift/DUT/pkt_o/tuser
 TreeUpdate [SetDefaultTree]
-WaveRestoreCursors {{Cursor 1} {126621073 ps} 0}
+WaveRestoreCursors {{Cursor 1} {1546307167 ps} 0}
 quietly wave cursor active 1
 configure wave -namecolwidth 428
 configure wave -valuecolwidth 100
@@ -69,4 +64,4 @@ configure wave -griddelta 40
 configure wave -timeline 0
 configure wave -timelineunits ps
 update
-WaveRestoreZoom {0 ps} {821569875 ps}
+WaveRestoreZoom {0 ps} {8238822375 ps}

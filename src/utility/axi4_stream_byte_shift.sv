@@ -28,14 +28,9 @@ logic [DATA_WIDTH_B_W : 0]          rx_bytes;
 logic [DATA_WIDTH_B_W : 0]          tx_bytes;
 logic [DATA_WIDTH_B_W + 1 : 0]      bytes_in_buf, bytes_in_buf_comb;
 logic                               pkt_i_tfirst;
-logic                               pkt_i_tlast_lock;
-logic                               pkt_i_tfirst_lock;
 logic                               pkt_o_tfirst;
-logic                               pkt_o_tlast_lock;
-logic                               pkt_o_tfirst_lock;
 logic                               backpressure;
 logic [DATA_WIDTH_B_W - 1 : 0]      shift_lock;
-logic [DATA_WIDTH_B_W - 1 : 0]      shift_value;
 
 assign move_data = pkt_i.tvalid && pkt_i.tready || backpressure && pkt_o.tready;
 
@@ -57,9 +52,9 @@ always_ff @( posedge clk_i, posedge rst_i )
         tstrb_buf[0] <= tstrb_buf[1];
       end
 
-assign shifted_tdata_buf = tdata_buf << ( shift_value * 8 );
-assign shifted_tstrb_buf = tstrb_buf << shift_value;
-assign shifted_tkeep_buf = tkeep_buf << shift_value;
+assign shifted_tdata_buf = tdata_buf << ( shift_lock * 8 );
+assign shifted_tstrb_buf = tstrb_buf << shift_lock;
+assign shifted_tkeep_buf = tkeep_buf << shift_lock;
 
 // Currently I have no idea what to do with these signals
 // I usually use tuser not as multiply of bytes in tdata but 
@@ -87,8 +82,11 @@ always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
     backpressure <= '0;
   else
+    // TODO: check FMAX in both cases
     if( pkt_i.tvalid && pkt_i.tready && pkt_i.tlast &&
-        ( ( bytes_in_buf_comb + shift_value ) > DATA_WIDTH_B[DATA_WIDTH_B_W : 0] ) )
+      ( ( pkt_i_tfirst && ( rx_bytes + shift_lock ) > DATA_WIDTH_B[DATA_WIDTH_B_W : 0] ) ||
+        ( bytes_in_buf_comb > DATA_WIDTH_B[DATA_WIDTH_B_W : 0] ) ) )
+        //( ( bytes_in_buf_comb + shift_lock ) > DATA_WIDTH_B[DATA_WIDTH_B_W : 0] ) )
       backpressure <= 1'b1;
     else
       if( pkt_o.tvalid && pkt_o.tready )
@@ -101,8 +99,6 @@ always_ff @( posedge clk_i, posedge rst_i )
   else
     if( pkt_i.tvalid && pkt_i.tready && pkt_i_tfirst )
       shift_lock <= shift_i;
-
-assign shift_value = ( pkt_i_tfirst_lock && pkt_i.tready ) ? shift_i : shift_lock;
 
 // First and last transactions contain as much bytes as the position of left most one
 // in tkeep signal, i.e. we keep all bytes before as significant and we don't
@@ -129,15 +125,15 @@ always_comb
     tx_bytes = '0;
     if( bytes_in_buf > '0 )
       if( pkt_o_tfirst )
-        if( bytes_in_buf <= ( DATA_WIDTH_B[DATA_WIDTH_B_W : 0] - shift_value ) )
+        if( bytes_in_buf <= ( DATA_WIDTH_B[DATA_WIDTH_B_W : 0] - shift_lock ) )
           tx_bytes = bytes_in_buf;
         else
-          tx_bytes = DATA_WIDTH_B[DATA_WIDTH_B_W : 0] - shift_value;
+          tx_bytes = DATA_WIDTH_B[DATA_WIDTH_B_W : 0] - shift_lock;
       else
         if( bytes_in_buf >= DATA_WIDTH_B[DATA_WIDTH_B_W : 0] )
           tx_bytes = DATA_WIDTH_B[DATA_WIDTH_B_W : 0];
         else
-          if( pkt_i_tlast_lock )
+          if( pkt_i_tfirst )
             tx_bytes = bytes_in_buf;
   end
 
@@ -164,48 +160,24 @@ always_comb
 // to declare that incoming packet has ended
 always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
-    pkt_i_tlast_lock <= 'd1;
+    pkt_i_tfirst <= 'd1;
   else
     if( pkt_i.tvalid && pkt_i.tready ) 
       if( pkt_i.tlast )
-        pkt_i_tlast_lock <= 1'b1;
+        pkt_i_tfirst <= 1'b1;
       else
-        pkt_i_tlast_lock <= 1'b0;
+        pkt_i_tfirst <= 1'b0;
 
-assign pkt_i_tfirst = pkt_i_tlast_lock && pkt_i.tvalid;
 
 always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
-    pkt_o_tlast_lock <= 'd1;
+    pkt_o_tfirst <= 'd1;
   else
     if( pkt_o.tvalid && pkt_o.tready ) 
       if( pkt_o.tlast )
-        pkt_o_tlast_lock <= 1'b1;
+        pkt_o_tfirst <= 1'b1;
       else
-        pkt_o_tlast_lock <= 1'b0;
-
-assign pkt_o_tfirst = pkt_o_tlast_lock && pkt_o.tvalid;
-
-// Shows that we are currently sending first word
-always_ff @( posedge clk_i, posedge rst_i )
-  if( rst_i )
-    pkt_i_tfirst_lock <= '0;
-  else
-    if( pkt_i_tfirst && pkt_i.tready )
-      pkt_i_tfirst_lock <= 1'b1;
-    else
-      if( pkt_i.tready )
-        pkt_i_tfirst_lock <= 1'b0;
-
-always_ff @( posedge clk_i, posedge rst_i )
-  if( rst_i )
-    pkt_o_tfirst_lock <= '0;
-  else
-    if( pkt_o_tfirst && pkt_o.tready )
-      pkt_o_tfirst_lock <= 1'b1;
-    else
-      if( pkt_o.tready )
-        pkt_o_tfirst_lock <= 1'b0;
+        pkt_o_tfirst <= 1'b0;
 
 // The last word tstrb and tkeep signals must be masked,
 // because we shift incoming values from two incoming words, and
@@ -222,8 +194,8 @@ always_comb
         end
   end
 
-assign tkeep_masked_tfirst = tkeep_buf[1] << shift_value;
-assign tstrb_masked_tfirst = tstrb_buf[1] << shift_value;
+assign tkeep_masked_tfirst = tkeep_buf[1] << shift_lock;
+assign tstrb_masked_tfirst = tstrb_buf[1] << shift_lock;
 
 assign pkt_o.tdata         = shifted_tdata_buf[1];
 assign pkt_o.tkeep         = pkt_o_tfirst ? tkeep_masked_tfirst : 
@@ -232,7 +204,7 @@ assign pkt_o.tstrb         = pkt_o_tfirst ? tstrb_masked_tfirst:
                              pkt_o.tlast ? tstrb_masked_tlast : shifted_tstrb_buf[1];
 assign pkt_i.tready        = pkt_o.tready && !backpressure;
 assign pkt_o.tvalid        = bytes_in_buf >= DATA_WIDTH_B[DATA_WIDTH_B_W : 0] || 
-                             pkt_i_tlast_lock && bytes_in_buf > 'd0;
-assign pkt_o.tlast         = pkt_i_tlast_lock && bytes_in_buf == tx_bytes;
+                             pkt_i_tfirst && bytes_in_buf > 'd0;
+assign pkt_o.tlast         = pkt_i_tfirst && bytes_in_buf == tx_bytes;
 
 endmodule
