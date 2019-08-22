@@ -9,8 +9,8 @@ module axi4_stream_byte_shift #(
   input                          clk_i,
   input                          rst_i,
   input [DATA_WIDTH_B_W - 1 : 0] shift_i,
-  axi4_stream_if                 pkt_i,
-  axi4_stream_if                 pkt_o
+  axi4_stream_if.slave           pkt_i,
+  axi4_stream_if.master          pkt_o
 );
 
 logic [1 : 0][DATA_WIDTH - 1 : 0]   tdata_buf;
@@ -26,7 +26,7 @@ logic [DATA_WIDTH_B - 1 : 0]        tstrb_masked_tfirst;
 logic [DATA_WIDTH_B - 1 : 0]        tkeep_masked_tfirst;
 logic [DATA_WIDTH_B_W : 0]          rx_bytes;
 logic [DATA_WIDTH_B_W : 0]          tx_bytes;
-logic [DATA_WIDTH_B_W + 1 : 0]      bytes_in_buf, bytes_in_buf_comb;
+logic [DATA_WIDTH_B_W : 0]          bytes_in_buf, bytes_in_buf_comb;
 logic                               pkt_i_tfirst;
 logic                               pkt_o_tfirst;
 logic                               backpressure;
@@ -78,15 +78,20 @@ always_ff @( posedge clk_i, posedge rst_i )
 
 // Backpressure is asserted when we need an additional transaction
 // which appeared because of the byte shift
+// By default backpressure applied only when needed in two cases.
+// First, when it is a one word packet that needs to split in two, for example
+// 00011111 with shift of 4 willb splited into 11110000 and 0000001, so
+// backpressure is required
+// Second, when we have more bytes at the end of packet than data bus width
+// To increase FMAX we can backpressure at every end of packet, but it will be
+// unnecessary sometimes
 always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
     backpressure <= '0;
   else
-    // TODO: check FMAX in both cases
-    if( pkt_i.tvalid && pkt_i.tready && pkt_i.tlast &&
+    if( ( pkt_i.tvalid && pkt_i.tready && pkt_i.tlast ) &&
       ( ( pkt_i_tfirst && ( rx_bytes + shift_lock ) > DATA_WIDTH_B[DATA_WIDTH_B_W : 0] ) ||
         ( bytes_in_buf_comb > DATA_WIDTH_B[DATA_WIDTH_B_W : 0] ) ) )
-        //( ( bytes_in_buf_comb + shift_lock ) > DATA_WIDTH_B[DATA_WIDTH_B_W : 0] ) )
       backpressure <= 1'b1;
     else
       if( pkt_o.tvalid && pkt_o.tready )
@@ -156,8 +161,6 @@ always_comb
           bytes_in_buf_comb = bytes_in_buf - tx_bytes;
   end
 
-// Used to determine first word of the next packet and
-// to declare that incoming packet has ended
 always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
     pkt_i_tfirst <= 'd1;
@@ -196,7 +199,6 @@ always_comb
 
 assign tkeep_masked_tfirst = tkeep_buf[1] << shift_lock;
 assign tstrb_masked_tfirst = tstrb_buf[1] << shift_lock;
-
 assign pkt_o.tdata         = shifted_tdata_buf[1];
 assign pkt_o.tkeep         = pkt_o_tfirst ? tkeep_masked_tfirst : 
                              pkt_o.tlast ? tkeep_masked_tlast : shifted_tkeep_buf[1];
