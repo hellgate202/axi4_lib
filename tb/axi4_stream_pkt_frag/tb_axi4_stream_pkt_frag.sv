@@ -146,11 +146,11 @@ task automatic compare_mbx();
 endtask
 
 axi4_stream_pkt_frag #(
-  .DATA_WIDTH      ( DATA_WIDTH      ),
-  .ID_WIDTH        ( ID_WIDTH        ),
-  .DEST_WIDTH      ( DEST_WIDTH      ),
-  .USER_WIDTH      ( USER_WIDTH      ),
-  .MAX_PKT_SIZE_B  ( MAX_PKT_SIZE_B  )
+  .TDATA_WIDTH      ( DATA_WIDTH      ),
+  .TID_WIDTH        ( ID_WIDTH        ),
+  .TDEST_WIDTH      ( DEST_WIDTH      ),
+  .TUSER_WIDTH      ( USER_WIDTH      ),
+  .MAX_FRAG_SIZE  ( MAX_PKT_SIZE_B  )
 ) DUT (
   .clk_i           ( clk             ),
   .rst_i           ( rst             ),
