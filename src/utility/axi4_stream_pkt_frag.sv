@@ -25,7 +25,7 @@ logic                             tx_handshake;
 logic [BYTE_CNT_WIDTH - 1: 0]     rx_bytes;
 logic [BYTE_CNT_WIDTH - 1: 0]     tx_bytes;
 logic [SHIFT_WIDTH - 1 : 0]       shift;
-logic [BUF_SIZE_B - 1 : 0][7 : 0] tdata_buf;
+logic [BUF_SIZE_B * 8 - 1 : 0]    tdata_buf;
 logic [BUF_SIZE_B - 1 : 0]        tstrb_buf;
 logic [BUF_SIZE_B - 1 : 0]        tkeep_buf;
 logic [TID_WIDTH - 1 : 0]         tid_buf;
@@ -70,7 +70,7 @@ always_ff @( posedge clk_i, posedge rst_i )
   else
     if( rx_handshake )
       begin
-        tdata_buf <= { pkt_i.tdata, tdata_buf[BUF_SIZE_B - 1 : TDATA_WIDTH_B] };
+        tdata_buf <= { pkt_i.tdata, tdata_buf[BUF_SIZE_B * 8 - 1 : TDATA_WIDTH_B * 8] };
         tstrb_buf <= { pkt_i.tstrb, tstrb_buf[BUF_SIZE_B - 1 : TDATA_WIDTH_B] };
         tkeep_buf <= { pkt_i.tkeep, tkeep_buf[BUF_SIZE_B - 1 : TDATA_WIDTH_B] };
         // I don't know what to do with these signals, leave them as is
@@ -180,7 +180,7 @@ always_ff @( posedge clk_i, posedge rst_i )
       // because input shift reg is shifting whole words
       // In other thing its the same as bytes_in_buf...
       if( tx_handshake && rx_handshake )
-        shift <= shift - SHIFT_WIDTH'( TDATA_WIDTH_B ) + ( SHIFT_WIDTH + 1 )'( tx_bytes );
+        shift <= shift - SHIFT_WIDTH'( TDATA_WIDTH_B ) + ( SHIFT_WIDTH )'( tx_bytes );
       else
         if( tx_handshake )
           shift <= shift + SHIFT_WIDTH'( tx_bytes );
@@ -219,7 +219,7 @@ always_comb
         pkt_o.tkeep[i] = 1'b0;
       end
 
-assign pkt_o.tdata  = tdata_buf[TDATA_WIDTH_B + shift - 1 -: TDATA_WIDTH_B];
+assign pkt_o.tdata  = tdata_buf[TDATA_WIDTH_B * 8 + shift * 8 - 1 -: TDATA_WIDTH_B * 8];
 assign pkt_o.tlast  = buf_done || frag_done;
 assign pkt_o.tvalid = !acc_flag && !idle_flag;
 assign pkt_o.tid    = tid_buf;
