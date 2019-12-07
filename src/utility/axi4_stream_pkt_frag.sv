@@ -17,14 +17,12 @@ localparam int TDATA_WIDTH_B  = TDATA_WIDTH / 8;
 localparam int BYTE_CNT_WIDTH = $clog2( TDATA_WIDTH_B ) + 1;
 localparam int BUF_SIZE_B     = TDATA_WIDTH_B * 2;
 localparam int BUF_CNT_WIDTH  = $clog2( BUF_SIZE_B );
-localparam int MAX_SHIFT      = TDATA_WIDTH_B;
-localparam int SHIFT_WIDTH    = $clog2( MAX_SHIFT ) + 1;
 
 logic                             rx_handshake;
 logic                             tx_handshake;
 logic [BYTE_CNT_WIDTH - 1: 0]     rx_bytes;
 logic [BYTE_CNT_WIDTH - 1: 0]     tx_bytes;
-logic [SHIFT_WIDTH - 1 : 0]       shift;
+logic [BYTE_CNT_WIDTH - 1 : 0]    shift;
 logic [BUF_SIZE_B * 8 - 1 : 0]    tdata_buf;
 logic [BUF_SIZE_B - 1 : 0]        tstrb_buf;
 logic [BUF_SIZE_B - 1 : 0]        tkeep_buf;
@@ -135,20 +133,14 @@ always_ff @( posedge clk_i, posedge rst_i )
         frag_bytes_left <= frag_bytes_left - tx_bytes;
 
 always_comb
-  // Current fragment has space for whole word
-  if( frag_bytes_left > MAX_FRAG_SIZE_WIDTH'( TDATA_WIDTH_B ) )
-    // And the whole word is in buffer
-    if( bytes_in_buf > BUF_CNT_WIDTH'( TDATA_WIDTH_B ) )
-      tx_bytes = BYTE_CNT_WIDTH'( TDATA_WIDTH_B );
-    // Else send the whole buffer
-    else
-      tx_bytes = BYTE_CNT_WIDTH'( bytes_in_buf );
-  // Current fragment has less space then one word
+  // Both fragment can handle whole word and there is whole word in buffer
+  if( frag_bytes_left > MAX_FRAG_SIZE_WIDTH'( TDATA_WIDTH_B ) && bytes_in_buf > BUF_CNT_WIDTH'( TDATA_WIDTH_B ) )
+    tx_bytes = BYTE_CNT_WIDTH'( TDATA_WIDTH_B );
   else
-    // But there is even less bytes in buffer, so we send the whole buffer
-    if( frag_bytes_left > MAX_FRAG_SIZE'( bytes_in_buf ) )
+    // There is plenty space in fragment, but not in buffer
+    if( frag_bytes_left > MAX_FRAG_SIZE_WIDTH'( TDATA_WIDTH_B ) || frag_bytes_left > MAX_FRAG_SIZE_WIDTH'( bytes_in_buf ) )
       tx_bytes = BYTE_CNT_WIDTH'( bytes_in_buf );
-    // Else send as much bytes as fragment can hold from buffer
+    // There is plenty space in buffer, but not in fragment
     else
       tx_bytes = BYTE_CNT_WIDTH'( frag_bytes_left );
 
@@ -170,25 +162,25 @@ assign max_frag_size = tfirst ? max_frag_size_i : max_frag_size_lock;
 // Decides which part of buffer we will transmit
 always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
-    shift <= SHIFT_WIDTH'( MAX_SHIFT );
+    shift <= BYTE_CNT_WIDTH'( TDATA_WIDTH_B );
   else
     // When we are fine and we are sending as much bytes as we can
     if( bytes_in_buf == BUF_CNT_WIDTH'( tx_bytes ) && tx_handshake )
-      shift <= SHIFT_WIDTH'( MAX_SHIFT );
+      shift <= BYTE_CNT_WIDTH'( TDATA_WIDTH_B );
     else
       // Instead of rx_bytes we are shifting data by TDATA_WIDTH_B value
       // because input shift reg is shifting whole words
       // In other thing its the same as bytes_in_buf...
       if( tx_handshake && rx_handshake )
-        shift <= shift - SHIFT_WIDTH'( TDATA_WIDTH_B ) + ( SHIFT_WIDTH )'( tx_bytes );
+        shift <= shift - BYTE_CNT_WIDTH'( TDATA_WIDTH_B ) + ( BYTE_CNT_WIDTH )'( tx_bytes );
       else
         if( tx_handshake )
-          shift <= shift + SHIFT_WIDTH'( tx_bytes );
+          shift <= shift + BYTE_CNT_WIDTH'( tx_bytes );
         else
           // ...exept this one. We reduce shift only if there were some data
           // before new word was accepted
           if( rx_handshake && bytes_in_buf > BUF_CNT_WIDTH'( 0 ) )
-            shift <= shift - SHIFT_WIDTH'( TDATA_WIDTH_B );
+            shift <= shift - BYTE_CNT_WIDTH'( TDATA_WIDTH_B );
 
 // Incoming packet has ended and buffer is about to be emptied
 assign buf_done  = bytes_in_buf == tx_bytes && was_eop;
@@ -201,9 +193,9 @@ assign frag_done = frag_bytes_left == tx_bytes;
 assign acc_flag  = tx_bytes < frag_bytes_left && tx_bytes < bytes_in_buf && 
                    tx_bytes != TDATA_WIDTH_B;
 
-// We can't receive more bytes when we have more than MAX_SHIFT bytes in
+// We can't receive more bytes when we have more than TDATA_WIDTH_B bytes in
 // buffer or we are flushing buffer after incoming packet has ended
-assign backpressure = bytes_in_buf >= BUF_SIZE_B'( MAX_SHIFT ) || flush_flag;
+assign backpressure = bytes_in_buf >= BUF_SIZE_B'( TDATA_WIDTH_B ) || flush_flag;
 
 // Selection of tdata, tkeep and tstrb depending on shift value
 always_comb
