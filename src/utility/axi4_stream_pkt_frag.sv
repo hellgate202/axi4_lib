@@ -74,9 +74,19 @@ always_ff @( posedge clk_i, posedge rst_i )
         tstrb_buf <= { pkt_i.tstrb, tstrb_buf[BUF_SIZE_B - 1 : TDATA_WIDTH_B] };
         tkeep_buf <= { pkt_i.tkeep, tkeep_buf[BUF_SIZE_B - 1 : TDATA_WIDTH_B] };
         // I don't know what to do with these signals, leave them as is
-        tid_buf   <= pkt_i.tid;
-        tdest_buf <= pkt_i.tdest;
-        tuser_buf <= pkt_i.tuser;
+        if( tfirst )
+          begin
+            tid_buf   <= pkt_i.tid;
+            tdest_buf <= pkt_i.tdest;
+            tuser_buf <= pkt_i.tuser;
+          end
+        else
+          if( tx_handshake )
+            begin
+              tid_buf   <= TID_WIDTH'( 0 );
+              tdest_buf <= TDEST_WIDTH'( 0 );
+              tuser_buf <= TUSER_WIDTH'( 0 );
+            end
       end
 
 // Amount of actual bytes in buffer
