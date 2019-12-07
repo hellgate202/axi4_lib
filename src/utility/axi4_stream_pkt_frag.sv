@@ -1,363 +1,220 @@
 module axi4_stream_pkt_frag #(
-  parameter int DATA_WIDTH     = 32,
-  parameter int ID_WIDTH       = 1,
-  parameter int DEST_WIDTH     = 1,
-  parameter int USER_WIDTH     = 1,
-  parameter int MAX_PKT_SIZE_B = 2048,
-  parameter int PKT_SIZE_WIDTH = $clog2( MAX_PKT_SIZE_B )
+  parameter int TDATA_WIDTH         = 64,
+  parameter int TID_WIDTH           = 1,
+  parameter int TDEST_WIDTH         = 1,
+  parameter int TUSER_WIDTH         = 1,
+  parameter int MAX_FRAG_SIZE       = 2048,
+  parameter int MAX_FRAG_SIZE_WIDTH = $clog2( MAX_FRAG_SIZE )
 )(
-  input                      clk_i,
-  input                      rst_i,
-  input [PKT_SIZE_WIDTH : 0] max_frag_size_i,
-  axi4_stream_if             pkt_i,
-  axi4_stream_if             pkt_o
+  input                           clk_i,
+  input                           rst_i,
+  input [MAX_FRAG_SIZE_WIDTH : 0] max_frag_size_i,
+  axi4_stream_if.slave            pkt_i,
+  axi4_stream_if.master           pkt_o
 );
 
-localparam int DATA_WIDTH_B   = DATA_WIDTH / 8;
-localparam int BYTE_CNT_WIDTH = $clog2( DATA_WIDTH_B );
+localparam int TDATA_WIDTH_B  = TDATA_WIDTH / 8;
+localparam int BYTE_CNT_WIDTH = $clog2( TDATA_WIDTH_B ) + 1;
+localparam int BUF_SIZE_B     = TDATA_WIDTH_B * 2;
+localparam int BUF_CNT_WIDTH  = $clog2( BUF_SIZE_B );
+localparam int MAX_SHIFT      = TDATA_WIDTH_B;
+localparam int SHIFT_WIDTH    = $clog2( MAX_SHIFT ) + 1;
 
-// Shifting buffers
-logic [1 : 0][DATA_WIDTH - 1 : 0]     data_buf;
-logic [1 : 0][DATA_WIDTH_B - 1 : 0]   tstrb_buf;
-logic [1 : 0][DATA_WIDTH_B - 1 : 0]   tkeep_buf;
-logic                                 buf_valid;
-logic [1 : 0][DATA_WIDTH - 1 : 0]     shifted_data_buf;
-logic [1 : 0][DATA_WIDTH_B - 1 : 0]   shifted_tstrb_buf;
-logic [1 : 0][DATA_WIDTH_B - 1 : 0]   shifted_tkeep_buf;
-logic        [BYTE_CNT_WIDTH : 0]     buf_shift;
-// Passthrough buffers
-logic        [ID_WIDTH - 1 : 0]       tid_buf;
-logic        [DEST_WIDTH - 1 : 0]     tdest_buf;
-logic        [USER_WIDTH - 1 : 0]     tuser_buf;
-// How many bytes did we received in incoming packet
-logic        [PKT_SIZE_WIDTH - 1 : 0] rx_pkt_byte_cnt;
-// How many bytes we can send in current fragment
-logic        [PKT_SIZE_WIDTH - 1 : 0] frag_avail_bytes;
-// How many bytes we didn't send from packet at fragment's end
-logic        [BYTE_CNT_WIDTH : 0]     unsent_bytes;
-// How mant bytes of incoming packet left to send
-logic        [PKT_SIZE_WIDTH - 1 : 0] pkt_bytes_left;
-logic                                 backpressure;
-// Usual amount of valid bytes the last word of fragment
-logic        [BYTE_CNT_WIDTH : 0]     val_bytes_eof;
-// Amount of valid bytes in the last word of the last fragment
-logic        [BYTE_CNT_WIDTH : 0]     last_frag_val_bytes_eof;
-// End of fragment during end of incoming packet
-logic                                 eof_during_eop;
-// End of the last fragment
-logic                                 last_frag_eof;
-// Valid bytes in current incoming word
-logic        [BYTE_CNT_WIDTH : 0]     rx_valid_bytes;
-// Valid bytes in current outcoming word
-logic        [BYTE_CNT_WIDTH : 0]     tx_valid_bytes;
-// Start of packet logic
-logic                                 tlast_lock;
-logic                                 tfirst;
-logic        [PKT_SIZE_WIDTH : 0]     max_frag_size_locked;
-// Masked fragmented tlast
-logic        [DATA_WIDTH_B - 1 : 0]   tstrb_eof;
-logic        [DATA_WIDTH_B - 1 : 0]   tstrb_last_frag_eof;
-logic        [DATA_WIDTH_B - 1 : 0]   tkeep_eof;
-logic        [DATA_WIDTH_B - 1 : 0]   tkeep_last_frag_eof;
+logic                             rx_handshake;
+logic                             tx_handshake;
+logic [BYTE_CNT_WIDTH - 1: 0]     rx_bytes;
+logic [BYTE_CNT_WIDTH - 1: 0]     tx_bytes;
+logic [SHIFT_WIDTH - 1 : 0]       shift;
+logic [BUF_SIZE_B - 1 : 0][7 : 0] tdata_buf;
+logic [BUF_SIZE_B - 1 : 0]        tstrb_buf;
+logic [BUF_SIZE_B - 1 : 0]        tkeep_buf;
+logic [TID_WIDTH - 1 : 0]         tid_buf;
+logic [TDEST_WIDTH - 1 : 0]       tdest_buf;
+logic [TUSER_WIDTH - 1 : 0]       tuser_buf;
+logic [BUF_CNT_WIDTH - 1 : 0]     bytes_in_buf;
+logic [MAX_FRAG_SIZE_WIDTH : 0]   frag_bytes_left;
+logic                             idle_flag;
+logic                             was_eop;
+logic                             flush_flag;
+logic                             tfirst;
+logic [MAX_FRAG_SIZE_WIDTH : 0]   max_frag_size_lock;
+logic [MAX_FRAG_SIZE_WIDTH : 0]   max_frag_size;
+logic                             buf_done;
+logic                             frag_done;
+logic                             acc_flag;
+logic                             backpressure;
 
-enum logic [2 : 0] { IDLE_S,
-                     PASSTHROUGH_S,
-                     FRAG_FROM_INPUT_S,
-                     FRAG_FROM_UNSENT_S,
-                     EOP_S              } state, next_state;
+assign rx_handshake = pkt_i.tvalid && pkt_i.tready;
+assign tx_handshake = pkt_o.tvalid && pkt_o.tready;
 
-always_ff @( posedge clk_i, posedge rst_i )
-  if( rst_i )
-    state <= IDLE_S;
-  else
-    state <= next_state;
-
+// Amount of ones in tkeep signal is amount of bytes to receive
 always_comb
   begin
-    next_state = state;
-    case( state )
-      IDLE_S:
-        begin
-          if( pkt_i.tvalid && pkt_o.tready )
-            if( pkt_i.tlast )
-              next_state = EOP_S;
-            else
-              if( max_frag_size_i <= DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] )
-                next_state = FRAG_FROM_INPUT_S;
-              else
-                next_state = PASSTHROUGH_S;
-        end
-      PASSTHROUGH_S:
-        begin
-          if( pkt_i.tvalid && pkt_o.tready )
-            if( pkt_i.tlast )
-              next_state = EOP_S;
-            else
-              if( ( rx_pkt_byte_cnt + unsent_bytes ) >= max_frag_size_locked )
-                next_state = FRAG_FROM_UNSENT_S;
-              else
-                if( ( rx_pkt_byte_cnt + DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] ) >= max_frag_size_locked )
-                  next_state = FRAG_FROM_INPUT_S;
-        end
-      FRAG_FROM_INPUT_S:
-        begin
-          if( pkt_i.tvalid && pkt_o.tready )
-            if( unsent_bytes > max_frag_size_locked[BYTE_CNT_WIDTH : 0] )
-              next_state = FRAG_FROM_UNSENT_S;
-            else
-              if( pkt_i.tlast )
-                next_state = EOP_S;
-              else
-                if( max_frag_size_locked > DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] )
-                  next_state = PASSTHROUGH_S;
-        end
-      FRAG_FROM_UNSENT_S:
-        begin
-          if( pkt_i.tvalid && pkt_o.tready )
-            if( max_frag_size_locked > DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] )
-              next_state = PASSTHROUGH_S;
-            else
-              if( unsent_bytes <= max_frag_size_locked[BYTE_CNT_WIDTH : 0] )
-                if( pkt_i.tlast )
-                  next_state = EOP_S;
-                else
-                  next_state = FRAG_FROM_INPUT_S;
-        end
-      EOP_S:
-        begin
-          if( last_frag_eof && pkt_o.tready )
-            next_state = IDLE_S;
-        end
-    endcase
+    rx_bytes = BYTE_CNT_WIDTH'( 0 );
+    for( int i = 0; i < TDATA_WIDTH_B; i++ )
+      if( pkt_i.tkeep[i] ) 
+        rx_bytes++;
   end
 
-assign val_bytes_eof           = max_frag_size_locked[BYTE_CNT_WIDTH - 1 : 0] ?
-                                 {1'b0, max_frag_size_locked[BYTE_CNT_WIDTH - 1 : 0]} :
-                                 DATA_WIDTH_B[BYTE_CNT_WIDTH : 0];
-assign last_frag_val_bytes_eof = pkt_bytes_left[BYTE_CNT_WIDTH - 1 : 0] ?
-                                 {1'b0, pkt_bytes_left[BYTE_CNT_WIDTH - 1 : 0]} :
-                                 DATA_WIDTH_B[BYTE_CNT_WIDTH : 0];
-
-always_comb
-  begin
-    rx_valid_bytes = '0;
-    for( int i = 0; i < DATA_WIDTH_B; i++ )
-      if( pkt_i.tstrb[i] || pkt_i.tkeep[i] )
-        rx_valid_bytes = rx_valid_bytes + 1'b1;
-  end
-
-always_comb
-  begin
-    tx_valid_bytes = '0;
-    for( int i = 0; i < DATA_WIDTH_B; i++ )
-      if( pkt_o.tstrb[i] || pkt_o.tkeep[i] )
-        tx_valid_bytes = tx_valid_bytes + 1'b1;
-  end
-
-assign eof_during_eop = frag_avail_bytes <= DATA_WIDTH_B[BYTE_CNT_WIDTH : 0];
-assign last_frag_eof  = pkt_bytes_left <= frag_avail_bytes && 
-                        pkt_bytes_left <= DATA_WIDTH_B[BYTE_CNT_WIDTH : 0];
-
-always_ff @( posedge clk_i, posedge rst_i )
-  if( rst_i )
-    unsent_bytes <= '0;
-  else
-    if( pkt_o.tready )
-      if( state == PASSTHROUGH_S && ( rx_pkt_byte_cnt + unsent_bytes ) >= max_frag_size_locked &&
-          pkt_i.tvalid && !pkt_i.tlast )
-        unsent_bytes <= unsent_bytes - DATA_WIDTH_B[BYTE_CNT_WIDTH : 0];
-      else
-        if( state == FRAG_FROM_UNSENT_S )
-          if( unsent_bytes > max_frag_size_locked[BYTE_CNT_WIDTH : 0] &&
-              max_frag_size_locked <= DATA_WIDTH_B[BYTE_CNT_WIDTH] )
-            unsent_bytes <= unsent_bytes - max_frag_size_locked[BYTE_CNT_WIDTH : 0];
-          else
-            unsent_bytes <= unsent_bytes + DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] - val_bytes_eof;
-        else
-          if( state == FRAG_FROM_INPUT_S && pkt_i.tvalid )
-            if( unsent_bytes > max_frag_size_locked[BYTE_CNT_WIDTH : 0] )
-              if( max_frag_size_locked > DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] )
-                unsent_bytes <= unsent_bytes - DATA_WIDTH_B[BYTE_CNT_WIDTH : 0];
-              else
-                unsent_bytes <= unsent_bytes - max_frag_size_locked[BYTE_CNT_WIDTH : 0];
-            else
-              unsent_bytes <= unsent_bytes + DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] - val_bytes_eof;
-          else
-            if( state == EOP_S )
-              if( frag_avail_bytes > DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] )
-                if( pkt_bytes_left > DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] )
-                  unsent_bytes <= unsent_bytes - DATA_WIDTH_B[BYTE_CNT_WIDTH : 0];
-                else
-                  unsent_bytes <= '0;
-              else
-                if( frag_avail_bytes < pkt_bytes_left )
-                  unsent_bytes <= unsent_bytes - frag_avail_bytes[BYTE_CNT_WIDTH : 0];
-                else
-                  unsent_bytes <= '0;
-
-assign buf_shift         = DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] - unsent_bytes;
-assign shifted_data_buf  = data_buf >>  ( buf_shift * 8 );
-assign shifted_tstrb_buf = tstrb_buf >> buf_shift;
-assign shifted_tkeep_buf = tkeep_buf >> buf_shift;
-
+// Shift register of incomning packet words
 always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
     begin
-      data_buf  <= '0;
-      tkeep_buf <= '0;
-      tstrb_buf <= '0;
-      tid_buf   <= '0;
-      tdest_buf <= '0;
-      tuser_buf <= '0;
+      tdata_buf <= ( BUF_SIZE_B * 8 )'( 0 );
+      tstrb_buf <= BUF_SIZE_B'( 0 );
+      tkeep_buf <= BUF_SIZE_B'( 0 );
+      tid_buf   <= TID_WIDTH'( 0 );
+      tdest_buf <= TDEST_WIDTH'( 0 );
+      tuser_buf <= TUSER_WIDTH'( 0 );
     end
   else
-    if( pkt_i.tready && pkt_i.tvalid )
+    if( rx_handshake )
       begin
-        data_buf[1]  <= pkt_i.tdata;
-        data_buf[0]  <= data_buf[1];
-        tkeep_buf[1] <= pkt_i.tkeep;
-        tkeep_buf[0] <= tkeep_buf[1];
-        tstrb_buf[1] <= pkt_i.tstrb;
-        tstrb_buf[0] <= tstrb_buf[1];
-        tid_buf      <= pkt_i.tid;
-        tdest_buf    <= pkt_i.tdest;
-        tuser_buf    <= pkt_i.tuser;
+        tdata_buf <= { pkt_i.tdata, tdata_buf[BUF_SIZE_B - 1 : TDATA_WIDTH_B] };
+        tstrb_buf <= { pkt_i.tstrb, tstrb_buf[BUF_SIZE_B - 1 : TDATA_WIDTH_B] };
+        tkeep_buf <= { pkt_i.tkeep, tkeep_buf[BUF_SIZE_B - 1 : TDATA_WIDTH_B] };
+        // I don't know what to do with these signals, leave them as is
+        tid_buf   <= pkt_i.tid;
+        tdest_buf <= pkt_i.tdest;
+        tuser_buf <= pkt_i.tuser;
       end
 
+// Amount of actual bytes in buffer
 always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
-    buf_valid <= '0;
+    bytes_in_buf <= BUF_CNT_WIDTH'( 0 );
   else
-    if( pkt_i.tready )
-      buf_valid <= pkt_i.tvalid;
+    if( rx_handshake && tx_handshake )
+      bytes_in_buf <= bytes_in_buf + BUF_CNT_WIDTH'( rx_bytes ) - BUF_CNT_WIDTH'( tx_bytes );
+    else
+      if( rx_handshake )
+        bytes_in_buf <= bytes_in_buf + BUF_CNT_WIDTH'( rx_bytes );
+      else
+        if( tx_handshake )
+          bytes_in_buf <= bytes_in_buf - BUF_CNT_WIDTH'( tx_bytes );
 
+// Used to determine if the previous packet has ended
 always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
-    tlast_lock <= 'd1;
+    was_eop <= 1'b1;
   else
-    if( pkt_i.tvalid && pkt_i.tready ) 
+    if( rx_handshake )
       if( pkt_i.tlast )
-        tlast_lock <= 1'b1;
+        was_eop <= 1'b1;
       else
-        tlast_lock <= 1'b0;
+        was_eop <= 1'b0;
 
-assign tfirst = tlast_lock && pkt_i.tvalid;
+// Flag is determining the state when the incoming packet has ended and we
+// still have bytes to send in buffer
+assign flush_flag = was_eop && ( BUF_CNT_WIDTH'( tx_bytes ) < bytes_in_buf || !pkt_o.tready );
+// Interface is idle when incoming packet has ended and no more bytes left in
+// buffer
+assign idle_flag  = was_eop && bytes_in_buf == BUF_CNT_WIDTH'( 0 );
 
+// How many bytes we can send in current fragment
 always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
-    max_frag_size_locked <= '0;
+    frag_bytes_left <= '0;
   else
-    if( tfirst && pkt_i.tready )
-      max_frag_size_locked <= max_frag_size_i;
-
-always_ff @( posedge clk_i, posedge rst_i )
-  if( rst_i )
-    pkt_bytes_left <= '0;
-  else
-    if( pkt_i.tvalid && pkt_i.tready && pkt_i.tlast )
-      if( state == PASSTHROUGH_S || state == IDLE_S )
-        pkt_bytes_left <= unsent_bytes + rx_valid_bytes;
-      else
-        pkt_bytes_left <= unsent_bytes + DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] - val_bytes_eof + rx_valid_bytes;
+    // Idle flag is used to initialize frag_bytes_left before the first packet
+    // or if frag size is changed between packets 
+    if( pkt_o.tlast && tx_handshake || idle_flag )
+      frag_bytes_left <= max_frag_size;
     else
-      if( pkt_o.tready )
-        if( frag_avail_bytes > DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] )
-          if( pkt_bytes_left > DATA_WIDTH_B[BYTE_CNT_WIDTH : 0] )
-            pkt_bytes_left <= pkt_bytes_left - DATA_WIDTH_B[BYTE_CNT_WIDTH : 0];
-          else
-            pkt_bytes_left <= '0;
-        else
-          if( frag_avail_bytes < pkt_bytes_left )
-            pkt_bytes_left <= pkt_bytes_left - frag_avail_bytes;
-          else
-            pkt_bytes_left <= '0;
+      if( tx_handshake )
+        frag_bytes_left <= frag_bytes_left - tx_bytes;
 
-always_ff @( posedge clk_i, posedge rst_i )
-  if( rst_i )
-    rx_pkt_byte_cnt <= '0;
-  else
-    if( pkt_i.tvalid && pkt_i.tready )
-      if( tfirst || state == FRAG_FROM_INPUT_S || state == FRAG_FROM_UNSENT_S )
-        if( pkt_i.tlast )
-          rx_pkt_byte_cnt <= rx_valid_bytes;
-        else
-          rx_pkt_byte_cnt <= DATA_WIDTH_B[BYTE_CNT_WIDTH : 0];
-      else
-        if( pkt_i.tlast )
-          rx_pkt_byte_cnt <= rx_pkt_byte_cnt + rx_valid_bytes;
-        else
-          rx_pkt_byte_cnt <= rx_pkt_byte_cnt + DATA_WIDTH_B[BYTE_CNT_WIDTH : 0];
-
-always_ff @( posedge clk_i, posedge rst_i )
-  if( rst_i )
-    frag_avail_bytes <= '0;
-  else
-    if( state == IDLE_S )
-      frag_avail_bytes <= max_frag_size_i;
+always_comb
+  // Current fragment has space for whole word
+  if( frag_bytes_left > MAX_FRAG_SIZE_WIDTH'( TDATA_WIDTH_B ) )
+    // And the whole word is in buffer
+    if( bytes_in_buf > BUF_CNT_WIDTH'( TDATA_WIDTH_B ) )
+      tx_bytes = BYTE_CNT_WIDTH'( TDATA_WIDTH_B );
+    // Else send the whole buffer
     else
-      if( pkt_o.tvalid && pkt_o.tready )
-        if( pkt_o.tlast )
-          frag_avail_bytes <= max_frag_size_locked;
+      tx_bytes = BYTE_CNT_WIDTH'( bytes_in_buf );
+  // Current fragment has less space then one word
+  else
+    // But there is even less bytes in buffer, so we send the whole buffer
+    if( frag_bytes_left > MAX_FRAG_SIZE'( bytes_in_buf ) )
+      tx_bytes = BYTE_CNT_WIDTH'( bytes_in_buf );
+    // Else send as much bytes as fragment can hold from buffer
+    else
+      tx_bytes = BYTE_CNT_WIDTH'( frag_bytes_left );
+
+// First word of the packet
+assign tfirst = was_eop && rx_handshake;
+
+// Locking fragment size in the first word of the packet
+always_ff @( posedge clk_i, posedge rst_i )
+  if( rst_i )
+    max_frag_size_lock <= '0;
+  else
+    if( tfirst )
+      max_frag_size_lock <= max_frag_size_i;
+
+// For first word we use value from input and then the locked value
+assign max_frag_size = tfirst ? max_frag_size_i : max_frag_size_lock;
+
+// Core part of the module
+// Decides which part of buffer we will transmit
+always_ff @( posedge clk_i, posedge rst_i )
+  if( rst_i )
+    shift <= SHIFT_WIDTH'( MAX_SHIFT );
+  else
+    // When we are fine and we are sending as much bytes as we can
+    if( bytes_in_buf == BUF_CNT_WIDTH'( tx_bytes ) && tx_handshake )
+      shift <= SHIFT_WIDTH'( MAX_SHIFT );
+    else
+      // Instead of rx_bytes we are shifting data by TDATA_WIDTH_B value
+      // because input shift reg is shifting whole words
+      // In other thing its the same as bytes_in_buf...
+      if( tx_handshake && rx_handshake )
+        shift <= shift - SHIFT_WIDTH'( TDATA_WIDTH_B ) + ( SHIFT_WIDTH + 1 )'( tx_bytes );
+      else
+        if( tx_handshake )
+          shift <= shift + SHIFT_WIDTH'( tx_bytes );
         else
-          frag_avail_bytes <= frag_avail_bytes - DATA_WIDTH_B[BYTE_CNT_WIDTH : 0];
+          // ...exept this one. We reduce shift only if there were some data
+          // before new word was accepted
+          if( rx_handshake && bytes_in_buf > BUF_CNT_WIDTH'( 0 ) )
+            shift <= shift - SHIFT_WIDTH'( TDATA_WIDTH_B );
 
+// Incoming packet has ended and buffer is about to be emptied
+assign buf_done  = bytes_in_buf == tx_bytes && was_eop;
+
+// When we are about to sent last word of the fragment
+assign frag_done = frag_bytes_left == tx_bytes;
+
+// When we are collecting bytes for one transfer, i.e. there is not enough
+// bytes for single transfer
+assign acc_flag  = tx_bytes < frag_bytes_left && tx_bytes < bytes_in_buf && 
+                   tx_bytes != TDATA_WIDTH_B;
+
+// We can't receive more bytes when we have more than MAX_SHIFT bytes in
+// buffer or we are flushing buffer after incoming packet has ended
+assign backpressure = bytes_in_buf >= BUF_SIZE_B'( MAX_SHIFT ) || flush_flag;
+
+// Selection of tdata, tkeep and tstrb depending on shift value
 always_comb
-  begin
-    tstrb_eof = '0;
-    for( int i = 0; i < DATA_WIDTH_B; i++ )
-      if( i < val_bytes_eof )
-        tstrb_eof[i] = shifted_tstrb_buf[0][i];
-      else
-        tstrb_eof[i] = 1'b0;
-  end
+  for( int i = 0; i < TDATA_WIDTH_B; i++ )
+    if( BYTE_CNT_WIDTH'( i ) < tx_bytes )
+      begin
+        pkt_o.tstrb[i] = tstrb_buf[shift + i];
+        pkt_o.tkeep[i] = tkeep_buf[shift + i];
+      end
+    else
+      begin
+        pkt_o.tstrb[i] = 1'b0;
+        pkt_o.tkeep[i] = 1'b0;
+      end
 
-always_comb
-  begin
-    tstrb_last_frag_eof = '0;
-    for( int i = 0; i < DATA_WIDTH_B; i++ )
-      if( i < last_frag_val_bytes_eof )
-        tstrb_last_frag_eof[i] = shifted_tstrb_buf[0][i];
-      else
-        tstrb_last_frag_eof[i] = 1'b0;
-  end
-
-always_comb
-  begin
-    tkeep_eof = '0;
-    for( int i = 0; i < DATA_WIDTH_B; i++ )
-      if( i < val_bytes_eof )
-        tkeep_eof[i] = shifted_tkeep_buf[0][i];
-      else
-        tkeep_eof[i] = 1'b0;
-  end
-
-always_comb
-  begin
-    tkeep_last_frag_eof = '0;
-    for( int i = 0; i < DATA_WIDTH_B; i++ )
-      if( i < last_frag_val_bytes_eof )
-        tkeep_last_frag_eof[i] = shifted_tstrb_buf[0][i];
-      else
-        tkeep_last_frag_eof[i] = 1'b0;
-  end
-
-assign backpressure = state == PASSTHROUGH_S && ( rx_pkt_byte_cnt + unsent_bytes ) >= max_frag_size_locked && !pkt_i.tlast && pkt_i.tvalid ||
-                      state == FRAG_FROM_INPUT_S && unsent_bytes > max_frag_size_locked[BYTE_CNT_WIDTH : 0] && pkt_i.tvalid ||
-                      state == FRAG_FROM_UNSENT_S && unsent_bytes > max_frag_size_locked[BYTE_CNT_WIDTH : 0] && max_frag_size_locked <= DATA_WIDTH_B[PKT_SIZE_WIDTH - 1 : 0] ||
-                      state == EOP_S;
-
-assign pkt_i.tready = backpressure ? 1'b0 : pkt_o.tready;
-assign pkt_o.tdata  = shifted_data_buf[0];
-assign pkt_o.tvalid = ( state == PASSTHROUGH_S || state == FRAG_FROM_INPUT_S ) && buf_valid ||
-                      state == FRAG_FROM_UNSENT_S || state == EOP_S;
-assign pkt_o.tlast  = state == FRAG_FROM_UNSENT_S || state == FRAG_FROM_INPUT_S ||
-                      state == EOP_S && ( eof_during_eop || last_frag_eof );
-assign pkt_o.tkeep  = state == EOP_S && last_frag_eof ? tkeep_last_frag_eof :
-                      state == FRAG_FROM_UNSENT_S || state == FRAG_FROM_INPUT_S || state == EOP_S && eof_during_eop ? tkeep_eof : shifted_tkeep_buf[0];
-assign pkt_o.tstrb  = state == EOP_S && last_frag_eof ? tstrb_last_frag_eof :
-                      state == FRAG_FROM_UNSENT_S || state == FRAG_FROM_INPUT_S || state == EOP_S && eof_during_eop ? tstrb_eof : shifted_tstrb_buf[0];
+assign pkt_o.tdata  = tdata_buf[TDATA_WIDTH_B + shift - 1 -: TDATA_WIDTH_B];
+assign pkt_o.tlast  = buf_done || frag_done;
+assign pkt_o.tvalid = !acc_flag && !idle_flag;
 assign pkt_o.tid    = tid_buf;
 assign pkt_o.tdest  = tdest_buf;
 assign pkt_o.tuser  = tuser_buf;
+assign pkt_i.tready = !backpressure;
 
 endmodule
