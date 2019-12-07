@@ -13,7 +13,7 @@ parameter int RANDOM_TVALID  = 1;
 parameter int RANDOM_TREADY  = 1;
 parameter int VERBOSE        = 0;
 
-parameter int MAX_PKT_SIZE_B = 1024;
+parameter int MAX_PKT_SIZE_B = 64;
 parameter int PKT_SIZE_WIDTH = $clog2( MAX_PKT_SIZE_B );
 
 parameter int CLK_T          = 5000;
@@ -51,21 +51,25 @@ axi4_stream_if #(
 );
 
 AXI4StreamMaster #(
-  .DATA_WIDTH    ( DATA_WIDTH    ),
-  .ID_WIDTH      ( ID_WIDTH      ),
-  .DEST_WIDTH    ( DEST_WIDTH    ),
-  .USER_WIDTH    ( USER_WIDTH    ),
-  .RANDOM_TVALID ( RANDOM_TVALID ),
-  .VERBOSE       ( VERBOSE       )
+  .DATA_WIDTH     ( DATA_WIDTH    ),
+  .ID_WIDTH       ( ID_WIDTH      ),
+  .DEST_WIDTH     ( DEST_WIDTH    ),
+  .USER_WIDTH     ( USER_WIDTH    ),
+  .RANDOM_TVALID  ( RANDOM_TVALID ),
+  .VERBOSE        ( VERBOSE       ),
+  .WATCHDOG_EN    ( 1'b1          ),
+  .WATCHDOG_LIMIT ( 200           )
 ) pkt_sender;
 
 AXI4StreamSlave #(
-  .DATA_WIDTH    ( DATA_WIDTH    ),
-  .ID_WIDTH      ( ID_WIDTH      ),
-  .DEST_WIDTH    ( DEST_WIDTH    ),
-  .USER_WIDTH    ( USER_WIDTH    ),
-  .RANDOM_TREADY ( RANDOM_TREADY ),
-  .VERBOSE       ( VERBOSE       )
+  .DATA_WIDTH     ( DATA_WIDTH    ),
+  .ID_WIDTH       ( ID_WIDTH      ),
+  .DEST_WIDTH     ( DEST_WIDTH    ),
+  .USER_WIDTH     ( USER_WIDTH    ),
+  .RANDOM_TREADY  ( RANDOM_TREADY ),
+  .VERBOSE        ( VERBOSE       ),
+  .WATCHDOG_EN    ( 1'b1          ),
+  .WATCHDOG_LIMIT ( 200           )
 ) pkt_receiver;
 
 task automatic clk_gen();
