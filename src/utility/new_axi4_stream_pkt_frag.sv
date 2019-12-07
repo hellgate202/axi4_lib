@@ -103,7 +103,7 @@ always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
     frag_bytes_left <= '0;
   else
-    if( pkt_o.tlast )
+    if( pkt_o.tlast && tx_handshake || was_eop && bytes_in_buf == BUF_CNT_WIDTH'( 0 ) )
       frag_bytes_left <= max_frag_size;
     else
       if( tx_handshake )
@@ -140,7 +140,7 @@ always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
     shift <= ( SHIFT_WIDTH + 1 )'( MAX_SHIFT );
   else
-    if( pkt_o.tlast && bytes_in_buf == BUF_CNT_WIDTH'( tx_bytes ) && tx_handshake )
+    if( bytes_in_buf == BUF_CNT_WIDTH'( tx_bytes ) && tx_handshake )
       shift <= ( SHIFT_WIDTH + 1 )'( MAX_SHIFT );
     else
       if( tx_handshake && rx_handshake )

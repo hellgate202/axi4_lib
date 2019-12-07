@@ -5,7 +5,7 @@
 
 module tb_axi4_stream_pkt_frag;
 
-parameter int DATA_WIDTH     = 32;
+parameter int DATA_WIDTH     = 64;
 parameter int ID_WIDTH       = 1;
 parameter int DEST_WIDTH     = 1;
 parameter int USER_WIDTH     = 1;
@@ -170,25 +170,25 @@ initial
     compare_mbx();
     apply_rst();
     @( posedge clk );
-    for( int i = 1; i <= 4 * DATA_WIDTH_B; i++ )
+    for( int i = 1; i <= 8 * DATA_WIDTH_B; i++ )
       begin
         max_frag_size = i;
-        for( int j = 1; j <= 4 * DATA_WIDTH_B; j++ )
+        for( int j = 1; j <= 8 * DATA_WIDTH_B; j++ )
           begin
             tx_pkt = generate_pkt( j );
             ref_model( tx_pkt, max_frag_size );
             pkt_sender.tx_data( tx_pkt );
           end
       end
-    repeat( 100 )
+    repeat( 200 )
       begin
-        max_frag_size = $urandom_range( 16, 1 );
-        repeat( 100 )
+        max_frag_size = $urandom_range( 64, 1 );
+        repeat( 1000 )
           begin
             tx_pkt = generate_pkt( $urandom_range( 16, 1 ) );
             ref_model( tx_pkt, max_frag_size );
             pkt_sender.tx_data( tx_pkt );
-            tx_pkt = generate_pkt( $urandom_range( 32, 16 ) );
+            tx_pkt = generate_pkt( $urandom_range( 64, 16 ) );
             ref_model( tx_pkt, max_frag_size );
             pkt_sender.tx_data( tx_pkt );
           end
