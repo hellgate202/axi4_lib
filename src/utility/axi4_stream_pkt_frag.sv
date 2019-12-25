@@ -48,10 +48,16 @@ assign tx_handshake = pkt_o.tvalid && pkt_o.tready;
 // Amount of ones in tkeep signal is amount of bytes to receive
 always_comb
   begin
-    rx_bytes = BYTE_CNT_WIDTH'( 0 );
-    for( int i = 0; i < TDATA_WIDTH_B; i++ )
-      if( pkt_i.tkeep[i] ) 
-        rx_bytes++;
+    rx_bytes = '0;
+    if( pkt_i.tvalid )
+      if( pkt_i.tlast )
+        begin
+          for( integer lmo = 0; lmo < TDATA_WIDTH_B; lmo++ )
+            if( pkt_i.tkeep[lmo] )
+              rx_bytes = BYTE_CNT_WIDTH'( lmo ) + 1'b1;
+        end
+      else
+        rx_bytes = BYTE_CNT_WIDTH'( TDATA_WIDTH_B );
   end
 
 // Shift register of incomning packet words
