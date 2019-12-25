@@ -5,19 +5,19 @@
 
 module tb_axi4_stream_pkt_frag;
 
-parameter int DATA_WIDTH     = 64;
-parameter int ID_WIDTH       = 1;
-parameter int DEST_WIDTH     = 1;
-parameter int USER_WIDTH     = 1;
-parameter int RANDOM_TVALID  = 1;
-parameter int RANDOM_TREADY  = 1;
-parameter int VERBOSE        = 0;
+parameter int TDATA_WIDTH     = 64;
+parameter int TID_WIDTH       = 1;
+parameter int TDEST_WIDTH     = 1;
+parameter int TUSER_WIDTH     = 1;
+parameter int RANDOM_TVALID   = 1;
+parameter int RANDOM_TREADY   = 1;
+parameter int VERBOSE         = 0;
 
-parameter int MAX_PKT_SIZE_B = 64;
-parameter int PKT_SIZE_WIDTH = $clog2( MAX_PKT_SIZE_B );
+parameter int MAX_PKT_SIZE_B  = 64;
+parameter int PKT_SIZE_WIDTH  = $clog2( MAX_PKT_SIZE_B );
 
-parameter int CLK_T          = 5000;
-parameter int DATA_WIDTH_B   = DATA_WIDTH / 8;
+parameter int CLK_T           = 5000;
+parameter int TDATA_WIDTH_B   = TDATA_WIDTH / 8;
 
 typedef bit [7 : 0] pkt_q [$];
 
@@ -31,45 +31,45 @@ mailbox rx_data_mbx  = new();
 mailbox ref_data_mbx = new();
 
 axi4_stream_if #(
-  .DATA_WIDTH  ( DATA_WIDTH ),
-  .ID_WIDTH    ( ID_WIDTH   ),
-  .DEST_WIDTH  ( DEST_WIDTH ),
-  .USER_WIDTH  ( USER_WIDTH )
+  .TDATA_WIDTH ( TDATA_WIDTH ),
+  .TID_WIDTH   ( TID_WIDTH   ),
+  .TDEST_WIDTH ( TDEST_WIDTH ),
+  .TUSER_WIDTH ( TUSER_WIDTH )
 ) tx_if (
-  .aclk        ( clk        ),
-  .aresetn     ( !rst       )
+  .aclk        ( clk         ),
+  .aresetn     ( !rst        )
 );
 
 axi4_stream_if #(
-  .DATA_WIDTH  ( DATA_WIDTH ),
-  .ID_WIDTH    ( ID_WIDTH   ),
-  .DEST_WIDTH  ( DEST_WIDTH ),
-  .USER_WIDTH  ( USER_WIDTH )
+  .TDATA_WIDTH ( TDATA_WIDTH ),
+  .TID_WIDTH   ( TID_WIDTH   ),
+  .TDEST_WIDTH ( TDEST_WIDTH ),
+  .TUSER_WIDTH ( TUSER_WIDTH )
 ) rx_if (
-  .aclk        ( clk        ),
-  .aresetn     ( !rst       )
+  .aclk        ( clk         ),
+  .aresetn     ( !rst        )
 );
 
 AXI4StreamMaster #(
-  .DATA_WIDTH     ( DATA_WIDTH    ),
-  .ID_WIDTH       ( ID_WIDTH      ),
-  .DEST_WIDTH     ( DEST_WIDTH    ),
-  .USER_WIDTH     ( USER_WIDTH    ),
-  .RANDOM_TVALID  ( RANDOM_TVALID ),
-  .VERBOSE        ( VERBOSE       ),
-  .WATCHDOG_EN    ( 1'b1          ),
-  .WATCHDOG_LIMIT ( 200           )
+  .TDATA_WIDTH    ( TDATA_WIDTH    ),
+  .TID_WIDTH      ( TID_WIDTH      ),
+  .TDEST_WIDTH    ( TDEST_WIDTH    ),
+  .TUSER_WIDTH    ( TUSER_WIDTH    ),
+  .RANDOM_TVALID  ( RANDOM_TVALID  ),
+  .VERBOSE        ( VERBOSE        ),
+  .WATCHDOG_EN    ( 1'b1           ),
+  .WATCHDOG_LIMIT ( 200            )
 ) pkt_sender;
 
 AXI4StreamSlave #(
-  .DATA_WIDTH     ( DATA_WIDTH    ),
-  .ID_WIDTH       ( ID_WIDTH      ),
-  .DEST_WIDTH     ( DEST_WIDTH    ),
-  .USER_WIDTH     ( USER_WIDTH    ),
-  .RANDOM_TREADY  ( RANDOM_TREADY ),
-  .VERBOSE        ( VERBOSE       ),
-  .WATCHDOG_EN    ( 1'b1          ),
-  .WATCHDOG_LIMIT ( 200           )
+  .TDATA_WIDTH    ( TDATA_WIDTH    ),
+  .TID_WIDTH      ( TID_WIDTH      ),
+  .TDEST_WIDTH    ( TDEST_WIDTH    ),
+  .TUSER_WIDTH    ( TUSER_WIDTH    ),
+  .RANDOM_TREADY  ( RANDOM_TREADY  ),
+  .VERBOSE        ( VERBOSE        ),
+  .WATCHDOG_EN    ( 1'b1           ),
+  .WATCHDOG_LIMIT ( 200            )
 ) pkt_receiver;
 
 task automatic clk_gen();
@@ -150,17 +150,17 @@ task automatic compare_mbx();
 endtask
 
 axi4_stream_pkt_frag #(
-  .TDATA_WIDTH      ( DATA_WIDTH      ),
-  .TID_WIDTH        ( ID_WIDTH        ),
-  .TDEST_WIDTH      ( DEST_WIDTH      ),
-  .TUSER_WIDTH      ( USER_WIDTH      ),
-  .MAX_FRAG_SIZE  ( MAX_PKT_SIZE_B  )
+  .TDATA_WIDTH     ( TDATA_WIDTH      ),
+  .TID_WIDTH       ( TID_WIDTH        ),
+  .TDEST_WIDTH     ( TDEST_WIDTH      ),
+  .TUSER_WIDTH     ( TUSER_WIDTH      ),
+  .MAX_FRAG_SIZE   ( MAX_PKT_SIZE_B   )
 ) DUT (
-  .clk_i           ( clk             ),
-  .rst_i           ( rst             ),
-  .max_frag_size_i ( max_frag_size   ),
-  .pkt_i           ( rx_if           ),
-  .pkt_o           ( tx_if           )
+  .clk_i           ( clk              ),
+  .rst_i           ( rst              ),
+  .max_frag_size_i ( max_frag_size    ),
+  .pkt_i           ( rx_if            ),
+  .pkt_o           ( tx_if            )
 );
 
 initial
@@ -174,10 +174,10 @@ initial
     compare_mbx();
     apply_rst();
     @( posedge clk );
-    for( int i = 1; i <= 8 * DATA_WIDTH_B; i++ )
+    for( int i = 1; i <= 8 * TDATA_WIDTH_B; i++ )
       begin
         max_frag_size = i;
-        for( int j = 1; j <= 8 * DATA_WIDTH_B; j++ )
+        for( int j = 1; j <= 8 * TDATA_WIDTH_B; j++ )
           begin
             tx_pkt = generate_pkt( j );
             ref_model( tx_pkt, max_frag_size );

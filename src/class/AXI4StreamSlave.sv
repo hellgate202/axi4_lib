@@ -1,10 +1,10 @@
 `timescale 1 ps / 1 ps
 
 class AXI4StreamSlave #(
-  parameter int DATA_WIDTH        = 32,
-  parameter int ID_WIDTH          = 1,
-  parameter int DEST_WIDTH        = 1,
-  parameter int USER_WIDTH        = 1,
+  parameter int TDATA_WIDTH        = 32,
+  parameter int TID_WIDTH          = 1,
+  parameter int TDEST_WIDTH        = 1,
+  parameter int TUSER_WIDTH        = 1,
 
   parameter int RANDOM_TREADY     = 0,
   parameter int VERBOSE           = 0,
@@ -14,13 +14,13 @@ class AXI4StreamSlave #(
   parameter int DISCONNECT_TREADY = 0
 );
 
-localparam int DATA_WIDTH_B = DATA_WIDTH / 8;
+localparam int TDATA_WIDTH_B = TDATA_WIDTH / 8;
 
 virtual axi4_stream_if #(
-  .DATA_WIDTH ( DATA_WIDTH  ),
-  .ID_WIDTH   ( ID_WIDTH    ),
-  .DEST_WIDTH ( DEST_WIDTH  ),
-  .USER_WIDTH ( USER_WIDTH  )
+  .TDATA_WIDTH ( TDATA_WIDTH  ),
+  .TID_WIDTH   ( TID_WIDTH    ),
+  .TDEST_WIDTH ( TDEST_WIDTH  ),
+  .TUSER_WIDTH ( TUSER_WIDTH  )
 ) axi4_stream_if_v;
 
 mailbox rx_data_mbx;
@@ -32,10 +32,10 @@ bit running;
 
 function new(
   virtual axi4_stream_if #(
-    .DATA_WIDTH ( DATA_WIDTH ),
-    .ID_WIDTH   ( ID_WIDTH   ),
-    .DEST_WIDTH ( DEST_WIDTH ),
-    .USER_WIDTH ( USER_WIDTH )  
+    .TDATA_WIDTH ( TDATA_WIDTH ),
+    .TID_WIDTH   ( TID_WIDTH   ),
+    .TDEST_WIDTH ( TDEST_WIDTH ),
+    .TUSER_WIDTH ( TUSER_WIDTH )  
   ) axi4_stream_if_v,
   mailbox rx_data_mbx
 );
@@ -138,7 +138,7 @@ protected task automatic get_pkt();
               $display( "%0d", $time() );
               $display( "AXI4-Stream Slave: %0h was received", axi4_stream_if_v.tdata );
             end
-          for( int i = 0; i < DATA_WIDTH_B; i++ )
+          for( int i = 0; i < TDATA_WIDTH_B; i++ )
             if( axi4_stream_if_v.tstrb[i] && axi4_stream_if_v.tkeep[i] )
               rx_byte_q.push_back( axi4_stream_if_v.tdata[i * 8 + 7 -: 8] );
           if( axi4_stream_if_v.tlast )

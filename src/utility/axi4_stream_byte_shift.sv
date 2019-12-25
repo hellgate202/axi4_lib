@@ -1,36 +1,36 @@
 module axi4_stream_byte_shift #(
-  parameter int DATA_WIDTH     = 32,
-  parameter int ID_WIDTH       = 1,
-  parameter int DEST_WIDTH     = 1,
-  parameter int USER_WIDTH     = 1,
-  parameter int DATA_WIDTH_B   = DATA_WIDTH / 8,
-  parameter int DATA_WIDTH_B_W = $clog2( DATA_WIDTH_B )
+  parameter int TDATA_WIDTH     = 32,
+  parameter int TID_WIDTH       = 1,
+  parameter int TDEST_WIDTH     = 1,
+  parameter int TUSER_WIDTH     = 1,
+  parameter int TDATA_WIDTH_B   = TDATA_WIDTH / 8,
+  parameter int TDATA_WIDTH_B_W = $clog2( TDATA_WIDTH_B )
 )(
-  input                          clk_i,
-  input                          rst_i,
-  input [DATA_WIDTH_B_W - 1 : 0] shift_i,
-  axi4_stream_if.slave           pkt_i,
-  axi4_stream_if.master          pkt_o
+  input                           clk_i,
+  input                           rst_i,
+  input [TDATA_WIDTH_B_W - 1 : 0] shift_i,
+  axi4_stream_if.slave            pkt_i,
+  axi4_stream_if.master           pkt_o
 );
 
-logic [1 : 0][DATA_WIDTH - 1 : 0]   tdata_buf;
-logic [1 : 0][DATA_WIDTH_B - 1 : 0] tstrb_buf;
-logic [1 : 0][DATA_WIDTH_B - 1 : 0] tkeep_buf;
-logic [1 : 0][DATA_WIDTH - 1 : 0]   shifted_tdata_buf;
-logic [1 : 0][DATA_WIDTH_B - 1 : 0] shifted_tstrb_buf;
-logic [1 : 0][DATA_WIDTH_B - 1 : 0] shifted_tkeep_buf;
-logic                               move_data;
-logic [DATA_WIDTH_B - 1 : 0]        tstrb_masked_tlast;
-logic [DATA_WIDTH_B - 1 : 0]        tkeep_masked_tlast;
-logic [DATA_WIDTH_B - 1 : 0]        tstrb_masked_tfirst;
-logic [DATA_WIDTH_B - 1 : 0]        tkeep_masked_tfirst;
-logic [DATA_WIDTH_B_W : 0]          rx_bytes;
-logic [DATA_WIDTH_B_W : 0]          tx_bytes;
-logic [DATA_WIDTH_B_W : 0]          bytes_in_buf, bytes_in_buf_comb;
-logic                               pkt_i_tfirst;
-logic                               pkt_o_tfirst;
-logic                               backpressure;
-logic [DATA_WIDTH_B_W - 1 : 0]      shift_lock;
+logic [1 : 0][TDATA_WIDTH - 1 : 0]   tdata_buf;
+logic [1 : 0][TDATA_WIDTH_B - 1 : 0] tstrb_buf;
+logic [1 : 0][TDATA_WIDTH_B - 1 : 0] tkeep_buf;
+logic [1 : 0][TDATA_WIDTH - 1 : 0]   shifted_tdata_buf;
+logic [1 : 0][TDATA_WIDTH_B - 1 : 0] shifted_tstrb_buf;
+logic [1 : 0][TDATA_WIDTH_B - 1 : 0] shifted_tkeep_buf;
+logic                                move_data;
+logic [TDATA_WIDTH_B - 1 : 0]        tstrb_masked_tlast;
+logic [TDATA_WIDTH_B - 1 : 0]        tkeep_masked_tlast;
+logic [TDATA_WIDTH_B - 1 : 0]        tstrb_masked_tfirst;
+logic [TDATA_WIDTH_B - 1 : 0]        tkeep_masked_tfirst;
+logic [TDATA_WIDTH_B_W : 0]          rx_bytes;
+logic [TDATA_WIDTH_B_W : 0]          tx_bytes;
+logic [TDATA_WIDTH_B_W : 0]          bytes_in_buf, bytes_in_buf_comb;
+logic                                pkt_i_tfirst;
+logic                                pkt_o_tfirst;
+logic                                backpressure;
+logic [TDATA_WIDTH_B_W - 1 : 0]      shift_lock;
 
 assign move_data = pkt_i.tvalid && pkt_i.tready || backpressure && pkt_o.tready;
 
@@ -90,8 +90,8 @@ always_ff @( posedge clk_i, posedge rst_i )
     backpressure <= '0;
   else
     if( ( pkt_i.tvalid && pkt_i.tready && pkt_i.tlast ) &&
-      ( ( pkt_i_tfirst && ( rx_bytes + shift_lock ) > DATA_WIDTH_B[DATA_WIDTH_B_W : 0] ) ||
-        ( bytes_in_buf_comb > DATA_WIDTH_B[DATA_WIDTH_B_W : 0] ) ) )
+      ( ( pkt_i_tfirst && ( rx_bytes + shift_lock ) > TDATA_WIDTH_B[TDATA_WIDTH_B_W : 0] ) ||
+        ( bytes_in_buf_comb > TDATA_WIDTH_B[TDATA_WIDTH_B_W : 0] ) ) )
       backpressure <= 1'b1;
     else
       if( pkt_o.tvalid && pkt_o.tready )
@@ -114,12 +114,12 @@ always_comb
     if( pkt_i.tvalid )
       if( pkt_i_tfirst || pkt_i.tlast )
         begin
-          for( integer lmo = 0; lmo < DATA_WIDTH_B; lmo++ )
+          for( integer lmo = 0; lmo < TDATA_WIDTH_B; lmo++ )
             if( pkt_i.tkeep[lmo] )
-              rx_bytes = lmo[DATA_WIDTH_B_W : 0] + 1'b1;
+              rx_bytes = lmo[TDATA_WIDTH_B_W : 0] + 1'b1;
         end
       else
-        rx_bytes = DATA_WIDTH_B[DATA_WIDTH_B_W : 0];
+        rx_bytes = TDATA_WIDTH_B[TDATA_WIDTH_B_W : 0];
   end
 
 // In first word we transmit up to such amount of words that was left after
@@ -130,13 +130,13 @@ always_comb
     tx_bytes = '0;
     if( bytes_in_buf > '0 )
       if( pkt_o_tfirst )
-        if( bytes_in_buf <= ( DATA_WIDTH_B[DATA_WIDTH_B_W : 0] - shift_lock ) )
+        if( bytes_in_buf <= ( TDATA_WIDTH_B[TDATA_WIDTH_B_W : 0] - shift_lock ) )
           tx_bytes = bytes_in_buf;
         else
-          tx_bytes = DATA_WIDTH_B[DATA_WIDTH_B_W : 0] - shift_lock;
+          tx_bytes = TDATA_WIDTH_B[TDATA_WIDTH_B_W : 0] - shift_lock;
       else
-        if( bytes_in_buf >= DATA_WIDTH_B[DATA_WIDTH_B_W : 0] )
-          tx_bytes = DATA_WIDTH_B[DATA_WIDTH_B_W : 0];
+        if( bytes_in_buf >= TDATA_WIDTH_B[TDATA_WIDTH_B_W : 0] )
+          tx_bytes = TDATA_WIDTH_B[TDATA_WIDTH_B_W : 0];
         else
           if( pkt_i_tfirst )
             tx_bytes = bytes_in_buf;
@@ -189,7 +189,7 @@ always_comb
   begin
     tkeep_masked_tlast = '0;
     tstrb_masked_tlast = '0;
-    for( int i = 0; i < DATA_WIDTH_B; i++ )
+    for( int i = 0; i < TDATA_WIDTH_B; i++ )
       if( i < tx_bytes )
         begin
           tkeep_masked_tlast[i] = shifted_tkeep_buf[1][i];
@@ -205,7 +205,7 @@ assign pkt_o.tkeep         = pkt_o_tfirst ? tkeep_masked_tfirst :
 assign pkt_o.tstrb         = pkt_o_tfirst ? tstrb_masked_tfirst:
                              pkt_o.tlast ? tstrb_masked_tlast : shifted_tstrb_buf[1];
 assign pkt_i.tready        = pkt_o.tready && !backpressure;
-assign pkt_o.tvalid        = bytes_in_buf >= DATA_WIDTH_B[DATA_WIDTH_B_W : 0] || 
+assign pkt_o.tvalid        = bytes_in_buf >= TDATA_WIDTH_B[TDATA_WIDTH_B_W : 0] || 
                              pkt_i_tfirst && bytes_in_buf > 'd0;
 assign pkt_o.tlast         = pkt_i_tfirst && bytes_in_buf == tx_bytes;
 

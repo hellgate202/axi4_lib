@@ -5,27 +5,27 @@
 
 module tb_axi4_stream_byte_shift;
 
-parameter int DATA_WIDTH     = 128;
-parameter int ID_WIDTH       = 1;
-parameter int DEST_WIDTH     = 1;
-parameter int USER_WIDTH     = 1;
-parameter int RANDOM_TVALID  = 1;
-parameter int RANDOM_TREADY  = 1;
-parameter int VERBOSE        = 0;
+parameter int TDATA_WIDTH     = 128;
+parameter int TID_WIDTH       = 1;
+parameter int TDEST_WIDTH     = 1;
+parameter int TUSER_WIDTH     = 1;
+parameter int RANDOM_TVALID   = 1;
+parameter int RANDOM_TREADY   = 1;
+parameter int VERBOSE         = 0;
 
-parameter int MAX_PKT_SIZE_B = 48;
-parameter int MIN_PKT_SIZE_B = 1;
-parameter int PKTS_AMOUNT    = 1000;
+parameter int MAX_PKT_SIZE_B  = 48;
+parameter int MIN_PKT_SIZE_B  = 1;
+parameter int PKTS_AMOUNT     = 1000;
 
-parameter int CLK_T          = 5000;
-parameter int DATA_WIDTH_B   = DATA_WIDTH / 8;
-parameter int DATA_WIDTH_B_W = $clog2( DATA_WIDTH_B );
+parameter int CLK_T           = 5000;
+parameter int TDATA_WIDTH_B   = TDATA_WIDTH / 8;
+parameter int TDATA_WIDTH_B_W = $clog2( TDATA_WIDTH_B );
 
 typedef bit [7 : 0] pkt_q [$];
 
 bit                          clk;
 bit                          rst;
-bit [DATA_WIDTH_B_W - 1 : 0] shift;
+bit [TDATA_WIDTH_B_W - 1 : 0] shift;
 
 pkt_q                        tx_pkt;
 pkt_q                        tx_pkt_pool[$];
@@ -34,39 +34,39 @@ mailbox rx_data_mbx  = new();
 mailbox ref_data_mbx = new();
 
 axi4_stream_if #(
-  .DATA_WIDTH  ( DATA_WIDTH ),
-  .ID_WIDTH    ( ID_WIDTH   ),
-  .DEST_WIDTH  ( DEST_WIDTH ),
-  .USER_WIDTH  ( USER_WIDTH )
+  .TDATA_WIDTH ( TDATA_WIDTH ),
+  .TID_WIDTH   ( TID_WIDTH   ),
+  .TDEST_WIDTH ( TDEST_WIDTH ),
+  .TUSER_WIDTH ( TUSER_WIDTH )
 ) tx_if (
-  .aclk        ( clk        ),
-  .aresetn     ( !rst       )
+  .aclk        ( clk         ),
+  .aresetn     ( !rst        )
 );
 
 axi4_stream_if #(
-  .DATA_WIDTH  ( DATA_WIDTH ),
-  .ID_WIDTH    ( ID_WIDTH   ),
-  .DEST_WIDTH  ( DEST_WIDTH ),
-  .USER_WIDTH  ( USER_WIDTH )
+  .TDATA_WIDTH ( TDATA_WIDTH ),
+  .TID_WIDTH   ( TID_WIDTH   ),
+  .TDEST_WIDTH ( TDEST_WIDTH ),
+  .TUSER_WIDTH ( TUSER_WIDTH )
 ) rx_if (
-  .aclk        ( clk        ),
-  .aresetn     ( !rst       )
+  .aclk        ( clk         ),
+  .aresetn     ( !rst        )
 );
 
 AXI4StreamMaster #(
-  .DATA_WIDTH    ( DATA_WIDTH    ),
-  .ID_WIDTH      ( ID_WIDTH      ),
-  .DEST_WIDTH    ( DEST_WIDTH    ),
-  .USER_WIDTH    ( USER_WIDTH    ),
+  .TDATA_WIDTH   ( TDATA_WIDTH   ),
+  .TID_WIDTH     ( TID_WIDTH     ),
+  .TDEST_WIDTH   ( TDEST_WIDTH   ),
+  .TUSER_WIDTH   ( TUSER_WIDTH   ),
   .RANDOM_TVALID ( RANDOM_TVALID ),
   .VERBOSE       ( VERBOSE       )
 ) pkt_sender;
 
 AXI4StreamSlave #(
-  .DATA_WIDTH    ( DATA_WIDTH    ),
-  .ID_WIDTH      ( ID_WIDTH      ),
-  .DEST_WIDTH    ( DEST_WIDTH    ),
-  .USER_WIDTH    ( USER_WIDTH    ),
+  .TDATA_WIDTH   ( TDATA_WIDTH   ),
+  .TID_WIDTH     ( TID_WIDTH     ),
+  .TDEST_WIDTH   ( TDEST_WIDTH   ),
+  .TUSER_WIDTH   ( TUSER_WIDTH   ),
   .RANDOM_TREADY ( RANDOM_TREADY ),
   .VERBOSE       ( VERBOSE       )
 ) pkt_receiver;
@@ -146,16 +146,16 @@ function automatic pkt_q generate_pkt( int size );
 endfunction
 
 axi4_stream_byte_shift #(
-  .DATA_WIDTH ( DATA_WIDTH ),
-  .ID_WIDTH   ( ID_WIDTH   ),
-  .DEST_WIDTH ( DEST_WIDTH ),
-  .USER_WIDTH ( USER_WIDTH )
+  .TDATA_WIDTH ( TDATA_WIDTH ),
+  .TID_WIDTH   ( TID_WIDTH   ),
+  .TDEST_WIDTH ( TDEST_WIDTH ),
+  .TUSER_WIDTH ( TUSER_WIDTH )
 ) DUT (
-  .clk_i      ( clk        ),
-  .rst_i      ( rst        ),
-  .shift_i    ( shift      ),
-  .pkt_i      ( rx_if      ),
-  .pkt_o      ( tx_if      )
+  .clk_i       ( clk         ),
+  .rst_i       ( rst         ),
+  .shift_i     ( shift       ),
+  .pkt_i       ( rx_if       ),
+  .pkt_o       ( tx_if       )
 );
 
 initial
@@ -169,7 +169,7 @@ initial
     join_none
     apply_rst();
     @( posedge clk );
-    for( int i = 0; i < DATA_WIDTH_B; i++ )
+    for( int i = 0; i < TDATA_WIDTH_B; i++ )
       begin
         shift = i;
         for( int i = 1; i < PKTS_AMOUNT; i++ )

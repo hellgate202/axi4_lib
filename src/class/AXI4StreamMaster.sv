@@ -1,10 +1,10 @@
 `timescale 1 ps / 1 ps
 
 class AXI4StreamMaster #(
-  parameter int DATA_WIDTH     = 32,
-  parameter int ID_WIDTH       = 1,
-  parameter int DEST_WIDTH     = 1,
-  parameter int USER_WIDTH     = 1,
+  parameter int TDATA_WIDTH     = 32,
+  parameter int TID_WIDTH       = 1,
+  parameter int TDEST_WIDTH     = 1,
+  parameter int TUSER_WIDTH     = 1,
 
   parameter int RANDOM_TVALID  = 0,
   parameter int VERBOSE        = 0,
@@ -12,13 +12,13 @@ class AXI4StreamMaster #(
   parameter int WATCHDOG_LIMIT = 100
 );
 
-localparam int DATA_WIDTH_B = DATA_WIDTH / 8;
+localparam int TDATA_WIDTH_B = TDATA_WIDTH / 8;
 
 virtual axi4_stream_if #(
-  .DATA_WIDTH ( DATA_WIDTH ),
-  .ID_WIDTH   ( ID_WIDTH   ),
-  .DEST_WIDTH ( DEST_WIDTH ),
-  .USER_WIDTH ( USER_WIDTH )
+  .TDATA_WIDTH ( TDATA_WIDTH ),
+  .TID_WIDTH   ( TID_WIDTH   ),
+  .TDEST_WIDTH ( TDEST_WIDTH ),
+  .TUSER_WIDTH ( TUSER_WIDTH )
 ) axi4_stream_if_v;
 
 mailbox tx_mbx = new();
@@ -33,10 +33,10 @@ bit         running;
 
 function new(
   virtual axi4_stream_if #(
-    .DATA_WIDTH ( DATA_WIDTH ),
-    .ID_WIDTH   ( ID_WIDTH   ),
-    .DEST_WIDTH ( DEST_WIDTH ),
-    .USER_WIDTH ( USER_WIDTH )  
+    .TDATA_WIDTH ( TDATA_WIDTH ),
+    .TID_WIDTH   ( TID_WIDTH   ),
+    .TDEST_WIDTH ( TDEST_WIDTH ),
+    .TUSER_WIDTH ( TUSER_WIDTH )  
   ) axi4_stream_if_v
 );
 
@@ -156,7 +156,7 @@ task automatic tx_data(
       axi4_stream_if_v.tvalid <= tvalid;
       if( tvalid )
         begin
-          for( int i = 0; i < DATA_WIDTH_B; i++ )
+          for( int i = 0; i < TDATA_WIDTH_B; i++ )
             if( tx_byte_q.size() > 0 )
               begin
                 axi4_stream_if_v.tdata[i * 8 + 7 -: 8] <= tx_byte_q.pop_front();

@@ -5,19 +5,19 @@
 
 module axi4_stream_example;
 
-parameter int DATA_WIDTH        = 32;
-parameter int ID_WIDTH          = 8;
-parameter int DEST_WIDTH        = 4;
-parameter int USER_WIDTH        = 1;
-parameter int RANDOM_TVALID     = 1;
-parameter int RANDOM_TREADY     = 1;
-parameter int CLK_T             = 8000;
-parameter int VERBOSE           = 3;
-parameter int DISCONNECT_TREADY = 0;
+parameter int TDATA_WIDTH        = 32;
+parameter int TID_WIDTH          = 8;
+parameter int TDEST_WIDTH        = 4;
+parameter int TUSER_WIDTH        = 1;
+parameter int RANDOM_TVALID      = 1;
+parameter int RANDOM_TREADY      = 1;
+parameter int CLK_T              = 8000;
+parameter int VERBOSE            = 3;
+parameter int DISCONNECT_TREADY  = 0;
 
-parameter int PKTS_AMOUNT       = 100;
-parameter int PKT_SIZE_MIN      = 1;
-parameter int PKT_SIZE_MAX      = 1000;
+parameter int PKTS_AMOUNT        = 100;
+parameter int PKT_SIZE_MIN       = 1;
+parameter int PKT_SIZE_MAX       = 1000;
 
 bit clk;
 bit rst;
@@ -34,32 +34,32 @@ pkt_q pkt;
 mailbox rx_data_mbx = new();
 
 axi4_stream_if #(
-  .DATA_WIDTH  ( DATA_WIDTH ),
-  .ID_WIDTH    ( ID_WIDTH   ),
-  .DEST_WIDTH  ( DEST_WIDTH ),
-  .USER_WIDTH  ( USER_WIDTH )
+  .TDATA_WIDTH ( TDATA_WIDTH ),
+  .TID_WIDTH   ( TID_WIDTH   ),
+  .TDEST_WIDTH ( TDEST_WIDTH ),
+  .TUSER_WIDTH ( TUSER_WIDTH )
 ) dut_if (
-  .aclk        ( clk        ),
-  .aresetn     ( ~rst       )
+  .aclk        ( clk         ),
+  .aresetn     ( ~rst        )
 );
 
 AXI4StreamMaster #(
-  .DATA_WIDTH    ( DATA_WIDTH    ),
-  .ID_WIDTH      ( ID_WIDTH      ),
-  .DEST_WIDTH    ( DEST_WIDTH    ),
-  .USER_WIDTH    ( USER_WIDTH    ),
-  .RANDOM_TVALID ( RANDOM_TVALID ),
-  .VERBOSE       ( VERBOSE       )
+  .TDATA_WIDTH   ( TDATA_WIDTH    ),
+  .TID_WIDTH     ( TID_WIDTH      ),
+  .TDEST_WIDTH   ( TDEST_WIDTH    ),
+  .TUSER_WIDTH   ( TUSER_WIDTH    ),
+  .RANDOM_TVALID ( RANDOM_TVALID  ),
+  .VERBOSE       ( VERBOSE        )
 ) master;
 
 AXI4StreamSlave #(
-  .DATA_WIDTH        ( DATA_WIDTH        ),
-  .ID_WIDTH          ( ID_WIDTH          ),
-  .DEST_WIDTH        ( DEST_WIDTH        ),
-  .USER_WIDTH        ( USER_WIDTH        ),
-  .RANDOM_TREADY     ( RANDOM_TREADY     ),
-  .VERBOSE           ( VERBOSE           ),
-  .DISCONNECT_TREADY ( DISCONNECT_TREADY )
+  .TDATA_WIDTH       ( TDATA_WIDTH        ),
+  .TID_WIDTH         ( TID_WIDTH          ),
+  .TDEST_WIDTH       ( TDEST_WIDTH        ),
+  .TUSER_WIDTH       ( TUSER_WIDTH        ),
+  .RANDOM_TREADY     ( RANDOM_TREADY      ),
+  .VERBOSE           ( VERBOSE            ),
+  .DISCONNECT_TREADY ( DISCONNECT_TREADY  )
 ) slave;
 
 task automatic clk_gen();
