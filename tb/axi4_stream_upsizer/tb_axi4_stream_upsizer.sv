@@ -31,7 +31,7 @@ mailbox rx_data_mbx  = new();
 mailbox ref_data_mbx = new();
 
 axi4_stream_if #(
-  .TDATA_WIDTH ( RX_TDATA_WIDTH ),
+  .TDATA_WIDTH ( TX_TDATA_WIDTH ),
   .TID_WIDTH   ( TID_WIDTH      ),
   .TDEST_WIDTH ( TDEST_WIDTH    ),
   .TUSER_WIDTH ( TUSER_WIDTH    )
@@ -41,7 +41,7 @@ axi4_stream_if #(
 );
 
 axi4_stream_if #(
-  .TDATA_WIDTH ( TX_TDATA_WIDTH ),
+  .TDATA_WIDTH ( RX_TDATA_WIDTH ),
   .TID_WIDTH   ( TID_WIDTH      ),
   .TDEST_WIDTH ( TDEST_WIDTH    ),
   .TUSER_WIDTH ( TUSER_WIDTH    )
@@ -109,7 +109,7 @@ task automatic run_checker();
 
   forever
     begin
-      if( rx_data_mbx.nun() > 0 && ref_data_mbx.num() > 0 )
+      if( rx_data_mbx.num() > 0 && ref_data_mbx.num() > 0 )
         begin
           rx_data_mbx.get( rx_pkt );
           ref_data_mbx.get( ref_pkt );
@@ -135,10 +135,10 @@ endtask
 
 axi4_stream_upsizer #(
   .RX_TDATA_WIDTH  ( RX_TDATA_WIDTH ),
-  .TX_TDATA_WIDTH  ( TX_TDATA_WIDTH )
+  .TX_TDATA_WIDTH  ( TX_TDATA_WIDTH ),
   .TID_WIDTH       ( TID_WIDTH      ),
   .TDEST_WIDTH     ( TDEST_WIDTH    ),
-  .TUSER_WIDTH     ( TUSER_WIDTH    ),
+  .TUSER_WIDTH     ( TUSER_WIDTH    )
 ) DUT (
   .clk_i           ( clk            ),
   .rst_i           ( rst            ),

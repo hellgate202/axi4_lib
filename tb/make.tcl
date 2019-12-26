@@ -41,6 +41,14 @@ proc axi4_stream_byte_shift {} {
   run -all
 }
 
+proc axi4_stream_upsizer {} {
+  compile_src axi4_stream_upsizer
+  vopt +acc tb_axi4_stream_upsizer -o tb_axi4_stream_upsizer_opt
+  vsim tb_axi4_stream_upsizer_opt
+  draw_waveforms axi4_stream_upsizer
+  run -all
+}
+
 proc axi4 {} {
   compile_src axi4
   vopt +acc axi4_example -o axi4_example_opt
@@ -56,6 +64,7 @@ proc help {} {
   echo "axi4_stream            - AXI4 Stream example."
   echo "axi4_stream_pkt_frag   - AXI4 Stream Packet Splitter Testbench"
   echo "axi4_stream_byte_shift - AXI4 Stream Byte Shifter"
+  echo "axi4_stream_upsizer    - AXI4 Stream Upsizer"
   echo "Type help to repeat this message."
 }
 
