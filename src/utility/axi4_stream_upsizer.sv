@@ -14,14 +14,16 @@ module axi4_stream_upsizer #(
 localparam int RX_TDATA_WIDTH_B   = RX_TDATA_WIDTH / 8;
 localparam int TX_TDATA_WIDTH_B   = TX_TDATA_WIDTH / 8;
 // How many bytes can be in buffer in worst case 
-localparam int MAX_BYTES_IN_BUF   = TX_TDATA_WIDTH_B + RX_TDATA_WIDTH_B - 1;
+localparam int MAX_BYTES_IN_BUF   = TX_TDATA_WIDTH_B % RX_TDATA_WIDTH_B ?
+                                    TX_TDATA_WIDTH_B + RX_TDATA_WIDTH_B - 1 : 
+                                    TX_TDATA_WIDTH_B;
 // Rounded up to input word size
 localparam int BUF_WIDTH_W        = MAX_BYTES_IN_BUF % RX_TDATA_WIDTH_B ?
                                     MAX_BYTES_IN_BUF / RX_TDATA_WIDTH_B + 1 :
-                                    MAX_BYTES_IN_BUF / RX_TDATA_WIDTH;
+                                    MAX_BYTES_IN_BUF / RX_TDATA_WIDTH_B;
 localparam int BUF_WIDTH_B        = BUF_WIDTH_W * RX_TDATA_WIDTH_B;
 // How many input words required to handle one output word
-localparam int RX_W_IN_TX_W       = TX_TDATA_WIDTH_B % RX_TDATA_WIDTH_B :
+localparam int RX_W_IN_TX_W       = TX_TDATA_WIDTH_B % RX_TDATA_WIDTH_B ?
                                     TX_TDATA_WIDTH_B / RX_TDATA_WIDTH_B + 1 :
                                     TX_TDATA_WIDTH_B / RX_TDATA_WIDTH_B;
 localparam int DEFAULT_SHIFT      = ( BUF_WIDTH_W - RX_W_IN_TX_W ) * RX_TDATA_WIDTH_B;
@@ -75,6 +77,10 @@ always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
     shift <= SHIFT_WIDTH'( DEFAULT_SHIFT );
   else
+    if( flush_flag )
+      if( bytes_in_buf < BUF_CNT_WIDTH'( TX_TDATA_WIDTH_B ) )
+        shift <= shift + SHIFT_WIDTH'( BUF_CNT_WIDTH'( TX_TDATA_WIDTH_B ) - bytes_in_buf )
+/*
     if( tx_handshake )
       if( flush_flag )
         if( tx_bytes == bytes_in_buf )
@@ -83,7 +89,7 @@ always_ff @( posedge clk_i, posedge rst_i )
           shift <= shift + tx_bytes;
       else
         shift <= SHIFT_WIDTH'( BUF_CNT_WIDTH'( DEFAULT_SHIFT - TX_TDATA_WIDTH_B ) - bytes_in_buf );
-
+*/
 always_comb
   begin
     rx_bytes = '0;

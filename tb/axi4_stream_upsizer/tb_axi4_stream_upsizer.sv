@@ -16,7 +16,7 @@ parameter int VERBOSE         = 0;
 
 parameter int PKTS_AMOUNT     = 1000;
 parameter int MIN_PKT_SIZE    = 1;
-parameter int MAX_PKT_SIZE    = 100;
+parameter int MAX_PKT_SIZE    = ( RX_TDATA_WIDTH / 8 ) * 3;
 
 parameter int CLK_T           = 5000;
 
@@ -162,7 +162,7 @@ initial
         tx_pkt = generate_pkt( $urandom_range( MAX_PKT_SIZE,
                                                MIN_PKT_SIZE ) );
         ref_data_mbx.put( tx_pkt );
-        pkt_sender.send_pkt( tx_pkt );
+        pkt_sender.tx_data( tx_pkt );
       end
     repeat( 10 )
       @( posedge clk );
