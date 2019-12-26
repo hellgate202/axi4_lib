@@ -164,6 +164,7 @@ assign pkt_o.tvalid = bytes_in_buf >= BUF_CNT_WIDTH'( TX_TDATA_WIDTH_B ) || flus
 assign pkt_o.tdata  = tdata_buf_shifted[TX_TDATA_WIDTH_B - 1 : 0];
 assign pkt_o.tkeep  = tkeep_buf_shifted[TX_TDATA_WIDTH_B - 1 : 0];
 assign pkt_o.tstrb  = tstrb_buf_shifted[TX_TDATA_WIDTH_B - 1 : 0];
+assign pkt_o.tlast  = flush_flag && bytes_in_buf == BUF_CNT_WIDTH'( tx_bytes );
 assign pkt_o.tid    = tid_buf;
 assign pkt_o.tdest  = tdest_buf;
 assign pkt_o.tuser  = tuser_buf;
