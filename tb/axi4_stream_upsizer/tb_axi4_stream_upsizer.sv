@@ -25,7 +25,6 @@ typedef bit [7 : 0] pkt_q [$];
 bit   clk;
 bit   rst;
 pkt_q tx_pkt;
-pkt_q tx_pkt_pool[$];
 
 mailbox rx_data_mbx  = new();
 mailbox ref_data_mbx = new();
@@ -157,10 +156,9 @@ initial
     join_none
     apply_rst();
     @( posedge clk );
-    for( int i = 0; i < PKTS_AMOUNT; i++ )
+    for( int i = 1; i < PKTS_AMOUNT; i++ )
       begin
-        tx_pkt = generate_pkt( $urandom_range( MAX_PKT_SIZE,
-                                               MIN_PKT_SIZE ) );
+        tx_pkt = generate_pkt( i );
         ref_data_mbx.put( tx_pkt );
         pkt_sender.tx_data( tx_pkt );
       end

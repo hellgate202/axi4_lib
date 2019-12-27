@@ -26,8 +26,9 @@ localparam int BUF_WIDTH_B        = BUF_WIDTH_W * RX_TDATA_WIDTH_B;
 localparam int RX_W_IN_TX_W       = TX_TDATA_WIDTH_B % RX_TDATA_WIDTH_B ?
                                     TX_TDATA_WIDTH_B / RX_TDATA_WIDTH_B + 1 :
                                     TX_TDATA_WIDTH_B / RX_TDATA_WIDTH_B;
-localparam int DEFAULT_SHIFT      = ( BUF_WIDTH_W - RX_W_IN_TX_W ) * RX_TDATA_WIDTH_B;
-localparam int SHIFT_WIDTH        = $clog2( MAX_BYTES_IN_BUF );
+localparam int VALID_BUF_POS      = BUF_WIDTH_W - RX_W_IN_TX_W;
+localparam int VALID_BUF_POS_B    = VALID_BUF_POS * RX_TDATA_WIDTH_B;
+localparam int SHIFT_WIDTH        = $clog2( RX_TDATA_WIDTH_B );
 localparam int RX_BYTE_CNT_WIDTH  = $clog2( RX_TDATA_WIDTH_B ) + 1;
 localparam int TX_BYTE_CNT_WIDTH  = $clog2( TX_TDATA_WIDTH_B ) + 1;
 localparam int BUF_CNT_WIDTH      = $clog2( BUF_WIDTH_B ) + 1;
@@ -35,6 +36,7 @@ localparam int BUF_CNT_WIDTH      = $clog2( BUF_WIDTH_B ) + 1;
 logic [BUF_WIDTH_W - 1 : 0][RX_TDATA_WIDTH - 1 : 0]   tdata_buf;
 logic [BUF_WIDTH_W - 1 : 0][RX_TDATA_WIDTH_B - 1 : 0] tkeep_buf;
 logic [BUF_WIDTH_W - 1 : 0][RX_TDATA_WIDTH_B - 1 : 0] tstrb_buf;
+logic [BUF_WIDTH_W - 1 : 0]                           tvalid_buf;
 logic [BUF_WIDTH_B - 1 : 0][7 : 0]                    tdata_buf_shifted;
 logic [BUF_WIDTH_B - 1 : 0]                           tkeep_buf_shifted;
 logic [BUF_WIDTH_B - 1 : 0]                           tstrb_buf_shifted;
@@ -57,39 +59,41 @@ assign tx_handshake = pkt_o.tready && pkt_o.tvalid;
 always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
     begin
-      tdata_buf <= ( BUF_WIDTH_B * 8 )'( 0 );
-      tkeep_buf <= ( BUF_WIDTH_B )'( 0 );
-      tstrb_buf <= ( BUF_WIDTH_B )'( 0 );
+      tdata_buf  <= ( BUF_WIDTH_B * 8 )'( 0 );
+      tkeep_buf  <= BUF_WIDTH_B'( 0 );
+      tstrb_buf  <= BUF_WIDTH_B'( 0 );
     end
   else
     if( rx_handshake )
       begin
-        tdata_buf <= { pkt_i.tdata, tdata_buf[BUF_WIDTH_W - 1 : 1] };
-        tkeep_buf <= { pkt_i.tkeep, tkeep_buf[BUF_WIDTH_W - 1 : 1] };
-        tstrb_buf <= { pkt_i.tstrb, tstrb_buf[BUF_WIDTH_W - 1 : 1] };
+        tdata_buf  <= { pkt_i.tdata, tdata_buf[BUF_WIDTH_W - 1 : 1] };
+        tkeep_buf  <= { pkt_i.tkeep, tkeep_buf[BUF_WIDTH_W - 1 : 1] };
+        tstrb_buf  <= { pkt_i.tstrb, tstrb_buf[BUF_WIDTH_W - 1 : 1] };
+        tvalid_buf <= { pkt_i.tvalid, tvalid_buf[BUF_WIDTH_W - 1: 1 ] };
       end
+    else
+      if( flush_flag && pkt_o.tready )
+        begin
+          tdata_buf  <= { TX_TDATA_WIDTH'( 0 ), tdata_buf[BUF_WIDTH_W - 1 : 1] };
+          tkeep_buf  <= { TX_TDATA_WIDTH_B'( 0 ), tkeep_buf[BUF_WIDTH_W - 1 : 1] };
+          tstrb_buf  <= { TX_TDATA_WIDTH_B'( 0 ), tstrb_buf[BUF_WIDTH_W - 1 : 1] };
+          tvalid_buf <= { BUF_WIDTH_W'( 0 ), tvalid_buf[BUF_WIDTH_W - 1: 1 ] };
+        end
 
-assign tdata_buf_shifted = tdata_buf >> ( shift * 8 );
-assign tkeep_buf_shifted = tkeep_buf >> shift;
-assign tstrb_buf_shifted = tstrb_buf >> shift;
+assign tdata_buf_shifted = tdata_buf << ( shift * 8 );
+assign tkeep_buf_shifted = tkeep_buf << shift;
+assign tstrb_buf_shifted = tstrb_buf << shift;
 
 always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
-    shift <= SHIFT_WIDTH'( DEFAULT_SHIFT );
+    shift <= SHIFT_WIDTH'( 0 );
   else
-    if( flush_flag )
-      if( bytes_in_buf < BUF_CNT_WIDTH'( TX_TDATA_WIDTH_B ) )
-        shift <= shift + SHIFT_WIDTH'( BUF_CNT_WIDTH'( TX_TDATA_WIDTH_B ) - bytes_in_buf )
-/*
     if( tx_handshake )
       if( flush_flag )
-        if( tx_bytes == bytes_in_buf )
-          shift <= SHIFT_WIDTH'( DEFAULT_SHIFT );
-        else
-          shift <= shift + tx_bytes;
+        shift <= SHIFT_WIDTH'( 0 );
       else
-        shift <= SHIFT_WIDTH'( BUF_CNT_WIDTH'( DEFAULT_SHIFT - TX_TDATA_WIDTH_B ) - bytes_in_buf );
-*/
+        shift <= SHIFT_WIDTH'( bytes_in_buf - BUF_CNT_WIDTH'( TX_TDATA_WIDTH_B ) );
+
 always_comb
   begin
     rx_bytes = '0;
@@ -133,7 +137,7 @@ always_ff @( posedge clk_i, posedge rst_i )
     if( rx_handshake && pkt_i.tlast )
       flush_flag <= 1'b1;
     else
-      if( bytes_in_buf == BUF_CNT_WIDTH'( tx_bytes ) )
+      if( tx_handshake && pkt_o.tlast )
         flush_flag <= 1'b0;
 
 always_ff @( posedge clk_i, posedge rst_i )
@@ -168,14 +172,14 @@ always_ff @( posedge clk_i, posedge rst_i )
           tuser_buf <= TUSER_WIDTH'( 0 );
         end
 
-assign backpressure = flush_flag && bytes_in_buf > BUF_CNT_WIDTH'( TX_TDATA_WIDTH_B );
+assign backpressure = flush_flag && !pkt_o.tlast;
 
 assign pkt_i.tready = pkt_o.tready && !backpressure;
-assign pkt_o.tvalid = bytes_in_buf >= BUF_CNT_WIDTH'( TX_TDATA_WIDTH_B ) || flush_flag;
-assign pkt_o.tdata  = tdata_buf_shifted[TX_TDATA_WIDTH_B - 1 : 0];
-assign pkt_o.tkeep  = tkeep_buf_shifted[TX_TDATA_WIDTH_B - 1 : 0];
-assign pkt_o.tstrb  = tstrb_buf_shifted[TX_TDATA_WIDTH_B - 1 : 0];
-assign pkt_o.tlast  = flush_flag && bytes_in_buf == BUF_CNT_WIDTH'( tx_bytes );
+assign pkt_o.tvalid = tvalid_buf[VALID_BUF_POS] && tx_bytes > '0;
+assign pkt_o.tdata  = tdata_buf_shifted[VALID_BUF_POS_B + TX_TDATA_WIDTH_B - 1 -: TX_TDATA_WIDTH_B];
+assign pkt_o.tkeep  = tkeep_buf_shifted[VALID_BUF_POS_B + TX_TDATA_WIDTH_B - 1 -: TX_TDATA_WIDTH_B];
+assign pkt_o.tstrb  = tstrb_buf_shifted[VALID_BUF_POS_B + TX_TDATA_WIDTH_B - 1 -: TX_TDATA_WIDTH_B];
+assign pkt_o.tlast  = flush_flag && pkt_o.tvalid && BUF_CNT_WIDTH'( tx_bytes ) == bytes_in_buf;
 assign pkt_o.tid    = tid_buf;
 assign pkt_o.tdest  = tdest_buf;
 assign pkt_o.tuser  = tuser_buf;
