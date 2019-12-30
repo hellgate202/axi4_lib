@@ -35,23 +35,24 @@ add wave -noupdate /tb_axi4_stream_upsizer/DUT/rst_i
 add wave -noupdate /tb_axi4_stream_upsizer/DUT/tdata_buf
 add wave -noupdate -radix binary /tb_axi4_stream_upsizer/DUT/tkeep_buf
 add wave -noupdate -radix binary /tb_axi4_stream_upsizer/DUT/tstrb_buf
-add wave -noupdate -radix binary /tb_axi4_stream_upsizer/DUT/tvalid_buf
-add wave -noupdate -radix hexadecimal /tb_axi4_stream_upsizer/DUT/tdata_buf_shifted
-add wave -noupdate -radix binary /tb_axi4_stream_upsizer/DUT/tkeep_buf_shifted
-add wave -noupdate -radix binary /tb_axi4_stream_upsizer/DUT/tstrb_buf_shifted
 add wave -noupdate /tb_axi4_stream_upsizer/DUT/tid_buf
 add wave -noupdate /tb_axi4_stream_upsizer/DUT/tdest_buf
 add wave -noupdate /tb_axi4_stream_upsizer/DUT/tuser_buf
-add wave -noupdate -radix unsigned /tb_axi4_stream_upsizer/DUT/shift
-add wave -noupdate -radix unsigned /tb_axi4_stream_upsizer/DUT/bytes_in_buf
+add wave -noupdate /tb_axi4_stream_upsizer/DUT/valid_bytes_buf
+add wave -noupdate /tb_axi4_stream_upsizer/DUT/shift
+add wave -noupdate /tb_axi4_stream_upsizer/DUT/tdata_buf_shifted
+add wave -noupdate -radix binary /tb_axi4_stream_upsizer/DUT/tkeep_buf_shifted
+add wave -noupdate -radix binary /tb_axi4_stream_upsizer/DUT/tstrb_buf_shifted
+add wave -noupdate -radix binary /tb_axi4_stream_upsizer/DUT/valid_bytes_buf_shifted
+add wave -noupdate -radix binary /tb_axi4_stream_upsizer/DUT/valid_bytes
 add wave -noupdate /tb_axi4_stream_upsizer/DUT/rx_handshake
 add wave -noupdate /tb_axi4_stream_upsizer/DUT/tx_handshake
 add wave -noupdate /tb_axi4_stream_upsizer/DUT/flush_flag
-add wave -noupdate /tb_axi4_stream_upsizer/DUT/send_tail_flag
 add wave -noupdate -radix unsigned /tb_axi4_stream_upsizer/DUT/rx_bytes
 add wave -noupdate -radix unsigned /tb_axi4_stream_upsizer/DUT/tx_bytes
-add wave -noupdate /tb_axi4_stream_upsizer/DUT/backpressure
+add wave -noupdate -radix unsigned /tb_axi4_stream_upsizer/DUT/bytes_in_buf
 add wave -noupdate /tb_axi4_stream_upsizer/DUT/tfirst
+add wave -noupdate /tb_axi4_stream_upsizer/DUT/backpressure
 add wave -noupdate -divider pkt_o
 add wave -noupdate /tb_axi4_stream_upsizer/DUT/pkt_o/aclk
 add wave -noupdate /tb_axi4_stream_upsizer/DUT/pkt_o/aresetn
@@ -65,7 +66,7 @@ add wave -noupdate /tb_axi4_stream_upsizer/DUT/pkt_o/tid
 add wave -noupdate /tb_axi4_stream_upsizer/DUT/pkt_o/tdest
 add wave -noupdate /tb_axi4_stream_upsizer/DUT/pkt_o/tuser
 TreeUpdate [SetDefaultTree]
-WaveRestoreCursors {{Cursor 1} {62281 ps} 0}
+WaveRestoreCursors {{Cursor 1} {46804 ps} 0}
 quietly wave cursor active 1
 configure wave -namecolwidth 428
 configure wave -valuecolwidth 100
@@ -81,4 +82,4 @@ configure wave -griddelta 40
 configure wave -timeline 0
 configure wave -timelineunits ps
 update
-WaveRestoreZoom {294317 ps} {450300 ps}
+WaveRestoreZoom {0 ps} {144375 ps}
