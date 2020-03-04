@@ -68,6 +68,7 @@ modport master(
   output awsize,
   output awburst,
   output awlock,
+  output awcache,
   output awprot,
   output awqos,
   output awregion,
