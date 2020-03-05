@@ -32,6 +32,8 @@ logic clk;
 logic rst;
 
 mailbox rd_data_mbx = new();
+mailbox wr_tran_mbx = new();
+mailbox rd_tran_mbx = new();
 
 bit [DATA_WIDTH - 1 : 0] wr_word_q [$];
 bit [DATA_WIDTH - 1 : 0] wr_word_q_buf [$];
@@ -53,7 +55,8 @@ axi4_if #(
   .aresetn      ( ~rst         )
 );
 
-AXI4Master #(
+
+typedef AXI4Master #(
   .DATA_WIDTH    ( DATA_WIDTH    ),
   .ADDR_WIDTH    ( ADDR_WIDTH    ),
   .ID_WIDTH      ( ID_WIDTH      ),
@@ -65,9 +68,9 @@ AXI4Master #(
   .RANDOM_WVALID ( RANDOM_WVALID ),
   .RANDOM_RREADY ( RANDOM_RREADY ),
   .VERBOSE       ( VERBOSE       )
-) master;
+) axi4_master;
 
-AXI4Slave #(
+typedef AXI4Slave #(
   .DATA_WIDTH    ( DATA_WIDTH    ),
   .ADDR_WIDTH    ( ADDR_WIDTH    ),
   .ID_WIDTH      ( ID_WIDTH      ),
@@ -79,7 +82,15 @@ AXI4Slave #(
   .RANDOM_WREADY ( RANDOM_WREADY ),
   .RANDOM_RVALID ( RANDOM_RVALID ),
   .VERBOSE       ( VERBOSE       )
-) slave;
+) axi4_slave;
+
+axi4_master master;
+axi4_slave  slave;
+
+typedef axi4_slave::wr_tran_t wr_tran_t;
+typedef axi4_slave::rd_tran_t rd_tran_t;
+wr_tran_t wr_tran;
+rd_tran_t rd_tran;
 
 task automatic clk_gen();
   clk = 1'b0;
@@ -90,12 +101,15 @@ task automatic clk_gen();
     end
 endtask
 
+
 initial
   begin
     master = new( .axi4_if_v   ( dut_if      ),
                   .rd_data_mbx ( rd_data_mbx )
                 );
-    slave  = new( .axi4_if_v ( dut_if ) );
+    slave  = new( .axi4_if_v   ( dut_if      ),
+                  .rd_tran_mbx ( rd_tran_mbx ),
+                  .wr_tran_mbx ( wr_tran_mbx ) );
     fork
       clk_gen();
     join_none

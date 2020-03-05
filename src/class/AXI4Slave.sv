@@ -1,3 +1,5 @@
+`timescale 1 ps / 1 ps
+
 class AXI4Slave #(
   parameter int INIT_PATH      = "",
   parameter int DATA_WIDTH     = 32,
@@ -19,13 +21,26 @@ class AXI4Slave #(
 localparam DATA_WIDTH_B   = DATA_WIDTH / 8;
 localparam ADDR_WORD_BITS = $clog2( DATA_WIDTH_B );
 
+typedef struct {
+  bit [ADDR_WIDTH - 1 : 0] start_addr;
+  bit [7 : 0]              wr_data [$];
+} wr_tran_t;
+
+typedef struct {
+  bit [ADDR_WIDTH - 1 : 0] start_addr;
+  int                      words_amount;
+} rd_tran_t;
+
 bit [7 : 0] memory [*];
 bit         running;
 
-event   wr_transaction_start;
-event   wr_transaction_end;
-event   rd_transaction_start;
-event   rd_transaction_end;
+event wr_transaction_start;
+event wr_transaction_end;
+event rd_transaction_start;
+event rd_transaction_end;
+
+mailbox rd_tran_mbx;
+mailbox wr_tran_mbx;
 
 virtual axi4_if #(
   .DATA_WIDTH   ( DATA_WIDTH   ),
@@ -48,10 +63,18 @@ function new(
     .BUSER_WIDTH  ( BUSER_WIDTH  ),
     .ARUSER_WIDTH ( ARUSER_WIDTH ),
     .RUSER_WIDTH  ( RUSER_WIDTH  )
-  ) axi4_if_v
+  ) axi4_if_v,
+  mailbox rd_tran_mbx = this.rd_tran_mbx,
+  mailbox wr_tran_mbx = this.wr_tran_mbx
 );
 
-  this.axi4_if_v = axi4_if_v;
+  this.axi4_if_v   = axi4_if_v;
+  this.rd_tran_mbx = rd_tran_mbx;
+  this.wr_tran_mbx = wr_tran_mbx;
+  if( this.rd_tran_mbx == null )
+    this.rd_tran_mbx = new();
+  if( this.wr_tran_mbx == null )
+    this.wr_tran_mbx = new();
   init_interface();
 
 endfunction
@@ -134,7 +157,9 @@ local task automatic wr_data();
   bit                      eot;
   bit [ADDR_WIDTH - 1 : 0] cur_addr = axi4_if_v.awaddr;
   bit [7:0]                awlen    = axi4_if_v.awlen;
+  wr_tran_t      wr_tran;
 
+  wr_tran.start_addr = axi4_if_v.awaddr;
   ->wr_transaction_start;
   if( VERBOSE > 1 )
     begin
@@ -155,7 +180,10 @@ local task automatic wr_data();
           for( int i = 0; i < DATA_WIDTH_B; i++ )
             begin
               if( axi4_if_v.wstrb[i] )
-                memory[cur_addr] = axi4_if_v.wdata[i * 8 + 7 -: 8];
+                begin
+                  wr_tran.wr_data.push_back( axi4_if_v.wdata[i * 8 + 7 -: 8] );
+                  memory[cur_addr] = axi4_if_v.wdata[i * 8 + 7 -: 8];
+                end
               cur_addr++;
             end
           if( VERBOSE > 2 )
@@ -181,6 +209,7 @@ local task automatic wr_data();
       $display( "%0d", $time() );
       $display( "AXI4 Slave: write transaction has been ended" );
     end
+  wr_tran_mbx.put( wr_tran );
   -> wr_transaction_end;
 
 endtask
@@ -203,7 +232,11 @@ local task automatic rd_data();
   bit                      rvalid;
   bit [8 : 0]              arlen    = axi4_if_v.arlen + 1'b1;
   bit [ADDR_WIDTH - 1 : 0] cur_addr = axi4_if_v.araddr;
+  rd_tran_t      rd_tran;
 
+  rd_tran.start_addr   = axi4_if_v.araddr;
+  rd_tran.words_amount = arlen;
+  rd_tran_mbx.put( rd_tran );
   -> rd_transaction_start;
   if( VERBOSE > 1 )
     begin

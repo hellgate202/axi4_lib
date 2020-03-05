@@ -155,4 +155,14 @@ modport slave(
   input  rready
 );
 
+typedef struct {
+  bit [ADDR_WIDTH - 1 : 0] start_addr;
+  bit [7 : 0]              wr_data [$];
+} wr_tran_t;
+
+typedef struct {
+  bit [ADDR_WIDTH - 1 : 0] start_addr;
+  int                      words_amount;
+} rd_tran_t;
+
 endinterface
