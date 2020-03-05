@@ -57,12 +57,20 @@ proc axi4 {} {
   run -all
 }
 
+proc axi4_multiport_mem {} {
+  compile_src axi4_multiport_mem
+  vopt +acc axi4_multiport_mem_example -o axi4_multiport_mem_example_opt
+  vsim axi4_multiport_mem_example_opt
+  draw_waveforms axi4_multiport_mem
+  run -all
+}
 
 proc help {} {
   echo "axi4                   - AXI4 example."
   echo "axi4_lite              - AXI4 Lite example."
   echo "axi4_stream            - AXI4 Stream example."
   echo "axi4_stream_pkt_frag   - AXI4 Stream Packet Splitter Testbench"
+  echo "axi4_multiport_mem     - AXI4 Multi Port memory example"
   echo "axi4_stream_byte_shift - AXI4 Stream Byte Shifter"
   echo "axi4_stream_upsizer    - AXI4 Stream Upsizer"
   echo "Type help to repeat this message."

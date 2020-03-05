@@ -1,0 +1,2 @@
+../src/interface/axi4_if.sv
+./axi4_multiport_mem/axi4_multiport_mem_example.sv
