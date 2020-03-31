@@ -7,12 +7,12 @@ class AXI4StreamVideoSource #(
   parameter string FILE_PATH    = ""
 );
 
-localparam int TDATA_WIDTH   = PX_WIDTH % 8 ? PX_WIDTH / 8 + 1 : PX_WIDTH / 8;
+localparam int TDATA_WIDTH   = PX_WIDTH % 8 ? ( PX_WIDTH / 8 + 1 ) * 8 : PX_WIDTH;
 localparam int TDATA_WIDTH_B = TDATA_WIDTH / 8;
 localparam int PX_AMOUNT     = FRAME_RES_X * FRAME_RES_Y;
 
-bit [PX_AMOUNT - 1 : 0][PX_WIDTH - 1 : 0] frame;
-bit                                       running;
+bit [PX_WIDTH - 1 : 0] frame [PX_AMOUNT - 1 : 0];
+bit                    running;
 
 virtual axi4_stream_if #(
   .TDATA_WIDTH ( TDATA_WIDTH ),
@@ -53,14 +53,14 @@ task automatic run();
   if( !running )
     begin
       running = 1'b1;
-    fork
-      forever
-        begin
-          send_frame();
-          if( !running )
-            break;
-        end
-    join_none
+      fork
+        forever
+          begin
+            send_frame();
+            if( !running )
+              break;
+          end
+      join_none
   end
 endtask
 
@@ -71,11 +71,11 @@ task automatic stop();
 endtask
 
 local task automatic send_frame();
-  bit [PX_WIDTH - 1 : 0] line [$];
+  bit [TDATA_WIDTH - 1 : 0] line [$];
   for( int y = 0; y < FRAME_RES_Y; y++ )
     begin
       for( int x = 0; x < FRAME_RES_X; x++ )
-        line.push_back( frame[y * FRAME_RES_X + x];
+        line.push_back( frame[y * FRAME_RES_X + x] );
       if( y == 0 )
         tx_data( line, 1 );
       else
@@ -105,15 +105,15 @@ local task automatic tx_data(
         end
       if( tuser_en && !was_tuser )
         begin
-          was_tuser              <= 1'b1;
+          was_tuser              = 1'b1;
           axi4_stream_if_v.tuser <= 1'b1;
         end
       else
         axi4_stream_if_v.tuser <= 1'b0;
-      if( tx_byte_q.size() == 0 )
+      if( px_q.size() == 0 )
         axi4_stream_if_v.tlast <= 1'b1;
       do
-        @( posedge axi4_stream_if_v.aclk )
+        @( posedge axi4_stream_if_v.aclk );
       while( !axi4_stream_if_v.tready );
     end
   axi4_stream_if_v.tvalid <= 1'b0;
