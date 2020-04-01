@@ -87,7 +87,7 @@ task automatic run();
                     $display( "%0d", $time() );
                     $display( "AXI4-Stream Slave: interface listening is disabled." );
                   end
-                if( !DISCONNECT_TREADY )
+                if( RANDOM_TREADY && !DISCONNECT_TREADY )
                   axi4_stream_if_v.tready = 1'b0;
                 break;
               end
