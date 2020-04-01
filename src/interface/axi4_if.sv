@@ -154,7 +154,7 @@ modport slave(
   output rvalid,
   input  rready
 );
-
+//synthesis translate_off
 typedef struct {
   bit [ADDR_WIDTH - 1 : 0] start_addr;
   bit [7 : 0]              wr_data [$];
@@ -164,5 +164,6 @@ typedef struct {
   bit [ADDR_WIDTH - 1 : 0] start_addr;
   int                      words_amount;
 } rd_tran_t;
+//synthesis translate_on
 
 endinterface
