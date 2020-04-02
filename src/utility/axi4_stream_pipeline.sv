@@ -64,14 +64,14 @@ always_ff @( posedge clk_i, posedge rst_i )
         if( ready_d1 && valid_d1[rd_ptr] )
           valid_d1[rd_ptr] <= 1'b0;
         if( pkt_i.tready )
-          valid_d1[wr_ptr] <= valid_i;
+          valid_d1[wr_ptr] <= pkt_i.tvalid;
       end
     else
       if( valid_d1[wr_ptr] && ready_d1 )
         valid_d1[wr_ptr] <= 1'b0;
       else
         if( pkt_i.tready )
-          valid_d1[wr_ptr] <= valid_i;
+          valid_d1[wr_ptr] <= pkt_i.tvalid;
 
 always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
