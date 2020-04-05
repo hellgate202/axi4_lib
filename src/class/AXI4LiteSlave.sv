@@ -11,7 +11,8 @@ class AXI4LiteSlave #(
 );
 
 localparam int DATA_WIDTH_B   = DATA_WIDTH / 8;
-localparam int ADDR_WORD_BITS = $clog2( DATA_WIDTH_B );
+localparam int ADDR_WORD_BITS = DATA_WIDTH_B == 1 ? 1 : 
+                                $clog2( DATA_WIDTH_B );
 
 bit [7 : 0] memory [*];
 bit         running;
