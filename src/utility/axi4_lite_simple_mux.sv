@@ -64,7 +64,7 @@ generate
     end
 endgenerate
 
-assign slave_req = axi4_lite_i.awvalid || axi4_lite_i.arvalid;
+assign slave_req = axi4_lite_o.awvalid || axi4_lite_o.arvalid;
 
 always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
