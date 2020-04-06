@@ -36,6 +36,7 @@ logic [MASTERS_AMOUNT - 1 : 0]                       master_rvalid;
 logic [MASTERS_AMOUNT - 1 : 0]                       master_rready;
 logic [MASTERS_AMOUNT - 1 : 0][DATA_WIDTH - 1 : 0]   master_rdata;
 logic [MASTERS_AMOUNT - 1 : 0][1 : 0]                master_rresp;
+logic                                                dir_change_allow;
 
 genvar g;
 
@@ -84,16 +85,16 @@ always_ff @( posedge clk_i, posedge rst_i )
         !( axi4_lite_o.wvalid && axi4_lite_o.wready ) )
       write_in_progress <= 1'b1;
     else
-      if( axi4_lite_o.wvalid && axi4_lite_o.wready )
+      if( axi4_lite_o.bvalid && axi4_lite_o.bready )
         write_in_progress <= 1'b0;
+
+assign dir_change_allow = !write_in_progress && !read_in_progress && !slave_req;
 
 always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
     dir <= DIR_WIDTH'( 0 );
   else
-    if( !( axi4_lite_o.awvalid && !axi4_lite_o.awready ) ||
-        !( axi4_lite_o.arvalid && !axi4_lite_o.arready ) ||
-        !write_in_progress || !read_in_progress )
+    if( dir_change_allow )
       dir <= dir_i;
 
 always_comb
