@@ -5,9 +5,6 @@ import cv2
 import sys
 
 output_path = "./img.hex"
-px_width    = 10
-
-value_mult = 2 ** ( px_width - 8 )
 
 def convert2bayer( img ):
   img_bay = np.zeros( ( img.shape[0], img.shape[1] ), dtype = np.uint8 )
@@ -28,6 +25,8 @@ def convert2bayer( img ):
 img = cv2.imread( sys.argv[1] )
 new_x = int( sys.argv[2] )
 new_y = int( sys.argv[3] )
+px_width = int( sys.argv[4] )
+value_mult = 2 ** ( px_width - 8 )
 
 print( "Resizing image to %0d x %0d" % ( new_x, new_y ) )
 img = cv2.resize( img, ( new_x, new_y ) )
