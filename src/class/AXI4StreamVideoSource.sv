@@ -1,10 +1,11 @@
 class AXI4StreamVideoSource #(
-  parameter int    PX_WIDTH     = 10,
-  parameter int    FRAME_RES_X  = 1920,
-  parameter int    FRAME_RES_Y  = 1080,
-  parameter int    TOTAL_X      = 2200,
-  parameter int    TOTAL_Y      = 1125,
-  parameter string FILE_PATH    = ""
+  parameter int    PX_WIDTH      = 10,
+  parameter int    FRAME_RES_X   = 1920,
+  parameter int    FRAME_RES_Y   = 1080,
+  parameter int    TOTAL_X       = 2200,
+  parameter int    TOTAL_Y       = 1125,
+  parameter int    RANDOM_TVALID = 0,
+  parameter string FILE_PATH     = ""
 );
 
 localparam int TDATA_WIDTH   = PX_WIDTH % 8 ? ( PX_WIDTH / 8 + 1 ) * 8 : PX_WIDTH;
@@ -93,28 +94,38 @@ local task automatic tx_data(
 );
 
   bit was_tuser = 1'b0;
+  bit tvalid;
 
   while( px_q.size() > 0 )
     begin
-      axi4_stream_if_v.tvalid <= 1'b1;
-      axi4_stream_if_v.tdata  <= px_q.pop_front();
-      for( int i = 0; i < TDATA_WIDTH_B; i++ )
+      if( RANDOM_TVALID )
+        tvalid = $urandom_range( 1 );
+      else
+        tvalid = 1;
+      axi4_stream_if_v.tvalid <= tvalid;
+      if( tvalid )
         begin
-          axi4_stream_if_v.tstrb[i] <= 1'b1;
-          axi4_stream_if_v.tkeep[i] <= 1'b1;
-        end
-      if( tuser_en && !was_tuser )
-        begin
-          was_tuser              = 1'b1;
-          axi4_stream_if_v.tuser <= 1'b1;
+          axi4_stream_if_v.tdata  <= px_q.pop_front();
+          for( int i = 0; i < TDATA_WIDTH_B; i++ )
+            begin
+              axi4_stream_if_v.tstrb[i] <= 1'b1;
+              axi4_stream_if_v.tkeep[i] <= 1'b1;
+            end
+          if( tuser_en && !was_tuser )
+            begin
+              was_tuser              = 1'b1;
+              axi4_stream_if_v.tuser <= 1'b1;
+            end
+          else
+            axi4_stream_if_v.tuser <= 1'b0;
+          if( px_q.size() == 0 )
+            axi4_stream_if_v.tlast <= 1'b1;
+          do
+            @( posedge axi4_stream_if_v.aclk );
+          while( !axi4_stream_if_v.tready );
         end
       else
-        axi4_stream_if_v.tuser <= 1'b0;
-      if( px_q.size() == 0 )
-        axi4_stream_if_v.tlast <= 1'b1;
-      do
         @( posedge axi4_stream_if_v.aclk );
-      while( !axi4_stream_if_v.tready );
     end
   axi4_stream_if_v.tvalid <= 1'b0;
   axi4_stream_if_v.tuser  <= '0;
