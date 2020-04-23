@@ -1,0 +1,3 @@
+../src/interface/axi4_stream_if.sv
+../src/utility/axi4_stream_multiple_downsizer.sv
+./axi4_stream_multiple_downsizer/tb_axi4_stream_multiple_downsizer.sv

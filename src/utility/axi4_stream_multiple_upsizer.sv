@@ -18,6 +18,9 @@ logic                         tx_handshake;
 logic [INS_CNT_WIDTH - 1 : 0] ins_pos;
 logic                         tfirst;
 
+assign rx_handshake = pkt_i.tvalid && pkt_i.tready;
+assign tx_handshake = pkt_o.tvalid && pkt_o.tready;
+
 always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
     tfirst <= 1'b1;
@@ -33,7 +36,7 @@ always_ff @( posedge clk_i, posedge rst_i )
     ins_pos <= INS_CNT_WIDTH'( 0 );
   else
     if( rx_handshake )
-      if( pkt_i.tlast || ins_pos == INS_CNT_WIDTH( RATIO - 1 ) )
+      if( pkt_i.tlast || ins_pos == INS_CNT_WIDTH'( RATIO - 1 ) )
         ins_pos <= INS_CNT_WIDTH'( 0 );
       else
         ins_pos <= ins_pos + 1'b1;
@@ -59,11 +62,11 @@ always_ff @( posedge clk_i, posedge rst_i )
     end
   else
     if( rx_handshake )
-      if( ins_pos == INS_CNT_WIDTH'( RATIO - 1 )  )
+      if( ins_pos == INS_CNT_WIDTH'( 0 ) )
         begin
-          pkt_o.tdata[SLAVE_TDATA_WIDTH - 1 : 0]     <= pkt_i.tdata;
-          pkt_o.tkeep[SLAVE_TDATA_WIDTH_B - 1 : 0] <= pkt_i.tkeep;
-          pkt_o.tstrb[SLAVE_TDATA_WIDTH_B - 1 : 0] <= pkt_i.tstrb;
+          pkt_o.tdata <= MASTER_TDATA_WIDTH'( pkt_i.tdata );
+          pkt_o.tkeep <= MASTER_TDATA_WIDTH_B'( pkt_i.tkeep );
+          pkt_o.tstrb <= MASTER_TDATA_WIDTH_B'( pkt_i.tstrb );
         end
       else
         begin

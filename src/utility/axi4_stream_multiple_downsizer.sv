@@ -26,6 +26,9 @@ logic                                               tlast_buf;
 logic                                               word_lock;
 logic [INS_CNT_WIDTH - 1 : 0]                       syms_in_rx_w, syms_in_rx_w_lock;
 
+assign rx_handshake = pkt_i.tvalid && pkt_i.tready;
+assign tx_handshake = pkt_o.tvalid && pkt_o.tready;
+
 always_ff @( posedge clk_i, posedge rst_i )
   if( rst_i )
     begin
@@ -52,7 +55,7 @@ always_ff @( posedge clk_i, posedge rst_i )
 always_comb
   begin
     syms_in_rx_w = INS_CNT_WIDTH'( 0 );
-    for( int i = 0; i < SLAVE_TDATA_WIDTH_B; i = i + MASTER_TDATA_WIDTH_B )
+    for( int i = MASTER_TDATA_WIDTH_B; i < SLAVE_TDATA_WIDTH_B; i = i + MASTER_TDATA_WIDTH_B )
       if( pkt_i.tkeep[i] )
         syms_in_rx_w = syms_in_rx_w + 1'b1;
   end
@@ -84,7 +87,7 @@ always_ff @( posedge clk_i, posedge rst_i )
       else
         ins_pos <= ins_pos + 1'b1;
 
-assign pkt_i.tready = !word_lock || ins_pos == syms_in_rx_w_lock;
+assign pkt_i.tready = !word_lock || ( ins_pos == syms_in_rx_w_lock && tx_handshake );
 assign pkt_o.tvalid = word_lock;
 assign pkt_o.tdata  = tdata_buf[ins_pos];
 assign pkt_o.tkeep  = tkeep_buf[ins_pos];
