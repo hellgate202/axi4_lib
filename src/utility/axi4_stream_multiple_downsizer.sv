@@ -11,7 +11,7 @@ module axi4_stream_multiple_downsizer #(
 localparam int SLAVE_TDATA_WIDTH_B  = SLAVE_TDATA_WIDTH / 8;
 localparam int MASTER_TDATA_WIDTH_B = MASTER_TDATA_WIDTH / 8;
 localparam int RATIO                = SLAVE_TDATA_WIDTH / MASTER_TDATA_WIDTH;
-localparam int INS_CNT_WIDTH        = $clog2( RATIO );
+localparam int INS_CNT_WIDTH        = RATIO == 1 ? 1 : $clog2( RATIO );
 
 logic                                               rx_handshake;
 logic                                               tx_handshake;
