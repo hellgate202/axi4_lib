@@ -19,6 +19,4 @@ print( "Creating sample hex file" )
 with open( output_path, "w+" ) as f:
   for y in range( img.shape[0] ):
     for x in range( img.shape[1] ):
-      f.write( hex( img[y][x][1] * value_mult )[2 :]+"\n" )
-      f.write( hex( img[y][x][0] * value_mult )[2 :]+"\n" )
-      f.write( hex( img[y][x][2] * value_mult )[2 :]+"\n" )
+      f.write( hex( img[y][x][1] * value_mult + ( ( img[y][x][0] * value_mult ) << px_width ) + ( ( img[y][x][2] * value_mult ) << ( px_width * 2 ) ) )[2 :]+"\n" )
